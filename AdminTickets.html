@@ -1,0 +1,131 @@
+<div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 32px;">
+  <div>
+    <h1 style="font-size: 28px; font-weight: 800; letter-spacing: -0.5px; color: var(--text-main);">Operational
+      Dashboard
+    </h1>
+    <p style="color: var(--text-muted); font-size: 14px;">Real-time metrics and request management.</p>
+  </div>
+  <div style="display: flex; gap: 12px;">
+    <a href="<?= rawDataUrl ?>" target="_blank" class="btn btn-secondary btn-sm">
+      <span>📈 View Raw Data</span>
+    </a>
+    <button class="btn btn-primary btn-sm" onclick="loadDashboard()">
+      <span>↻ Refresh</span>
+    </button>
+  </div>
+</div>
+
+<div id="metrics-grid" class="metrics-grid">
+  <div class="card metric-card">
+    <span class="label">Open Tickets</span>
+    <span class="value" id="count-open">-</span>
+  </div>
+  <div class="card metric-card">
+    <span class="label">New (Today)</span>
+    <span class="value" id="count-new">-</span>
+  </div>
+  <div class="card metric-card">
+    <span class="label">In Progress</span>
+    <span class="value" id="count-progress">-</span>
+  </div>
+  <div class="card metric-card" style="border-bottom: 3px solid var(--brand-orange);">
+    <span class="label">Avg. Resolution Time</span>
+    <span class="value" id="count-avg">-</span>
+    <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;">DAYS</span>
+  </div>
+</div>
+
+<div class="card">
+  <div
+    style="padding: 16px 20px; border-bottom: 1px solid var(--border-subtle); background: #FAFAFB; display: flex; justify-content: space-between; align-items: center;">
+    <h3 style="font-size: 14px; font-weight: 700; color: var(--text-main);">Request Queue</h3>
+    <div style="display: flex; gap: 8px;">
+      <input type="text" id="search-input" class="form-control" placeholder="Search ticket..."
+        style="padding: 6px 12px; font-size: 12px; width: 200px;">
+    </div>
+  </div>
+
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Requester</th>
+          <th>Subject</th>
+          <th>Status</th>
+          <th>Priority</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody id="tickets-tbody">
+        <tr>
+          <td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">Loading tickets...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  function loadDashboard() {
+    // Show loading state visually
+    const tbody = document.getElementById('tickets-tbody');
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);"><div class="spinner" style="margin: 0 auto 12px;"></div>Syncing and loading data...</td></tr>';
+
+    google.script.run
+      .withSuccessHandler(renderDashboard)
+      .withFailureHandler(function (err) {
+        console.error(err);
+        document.getElementById('metrics-grid').innerHTML = '<div class="card" style="padding:20px; color:var(--error-red);">Error loading metrics: ' + err.message + '</div>';
+      })
+      .getDashboardMetrics();
+
+    google.script.run
+      .withSuccessHandler(renderTable)
+      .withFailureHandler(function (err) {
+        console.error(err);
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--error-red);">Error loading tickets: ' + err.message + '</td></tr>';
+      })
+      .getAllTickets();
+  }
+
+  function renderDashboard(metrics) {
+    document.getElementById('count-open').innerText = metrics.openCases || 0;
+    document.getElementById('count-new').innerText = metrics.newCount || 0;
+    document.getElementById('count-progress').innerText = metrics.inProgressCount || 0;
+    document.getElementById('count-avg').innerText = metrics.avgResolutionTime || '0';
+  }
+
+  function renderTable(tickets) {
+    const tbody = document.getElementById('tickets-tbody');
+    tbody.innerHTML = '';
+
+    if (!tickets || tickets.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px;">No pending tickets.</td></tr>';
+      return;
+    }
+
+    tickets.forEach(t => {
+      const row = document.createElement('tr');
+      row.style.cursor = 'pointer';
+      row.onclick = () => window.location.href = '<?= appUrl ?>?page=detail&id=' + t.ticketId;
+
+      const badgeClass = t.status === 'New' ? 'badge-status-new' : (t.status === 'In Progress' ? 'badge-status-progress' : 'badge-status-closed');
+
+      row.innerHTML = `
+        <td style="font-weight: 700; color: var(--brand-orange);">${t.ticketId}</td>
+        <td>
+          <div style="font-weight: 600;">${escapeHtml(t.requesterName || t.createdByEmail)}</div>
+          <div style="font-size: 11px; color: var(--text-muted);">${t.createdByEmail}</div>
+        </td>
+        <td style="max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(t.subject)}</td>
+        <td><span class="badge ${badgeClass}">${t.status}</span></td>
+        <td><span style="font-size: 12px; font-weight: 600;">${t.priority}</span></td>
+        <td style="font-size: 12px; color: var(--text-muted);">${new Date(t.createdAt).toLocaleDateString()}</td>
+      `;
+      tbody.appendChild(row);
+    });
+  }
+
+  window.onload = loadDashboard;
+</script>

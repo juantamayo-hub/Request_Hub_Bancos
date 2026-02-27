@@ -1,0 +1,240 @@
+<div style="margin-bottom: 24px;">
+  <a href="<?= appUrl ?>?page=mis-tickets" class="btn btn-ghost btn-sm" style="margin-left: -12px;">&larr; Back to
+    List</a>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 350px; gap: 32px; align-items: start;">
+
+  <!-- Left Column: Ticket Information -->
+  <div style="display: flex; flex-direction: column; gap: 24px;">
+    <div class="card" style="padding: 32px;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px;">
+        <div>
+          <span
+            style="font-size: 13px; font-weight: 700; color: var(--brand-orange); text-transform: uppercase; letter-spacing: 1px;">
+            <?= ticketId ?>
+          </span>
+          <h1 id="ticket-subject" style="font-size: 24px; font-weight: 800; color: var(--text-main); margin-top: 4px;">
+            Loading...</h1>
+        </div>
+        <div id="ticket-status-badge"></div>
+      </div>
+
+      <div
+        style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; padding: 20px; background: var(--bg-app); border-radius: var(--radius-md);">
+        <div>
+          <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">
+            Requester</div>
+          <div id="ticket-requester" style="font-size: 14px; font-weight: 600; margin-top: 4px;">-</div>
+        </div>
+        <div>
+          <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Category
+          </div>
+          <div id="ticket-category" style="font-size: 14px; font-weight: 600; margin-top: 4px;">-</div>
+        </div>
+        <div>
+          <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Priority
+          </div>
+          <div id="ticket-priority" style="font-size: 14px; font-weight: 600; margin-top: 4px;">-</div>
+        </div>
+        <div>
+          <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Owner
+          </div>
+          <div id="ticket-owner" style="font-size: 14px; font-weight: 600; margin-top: 4px;">Unassigned</div>
+        </div>
+      </div>
+
+      <div style="border-top: 1px solid var(--border-subtle); padding-top: 24px;">
+        <h3 style="font-size: 14px; font-weight: 700; margin-bottom: 12px;">Description</h3>
+        <div id="ticket-description"
+          style="font-size: 15px; color: var(--text-main); white-space: pre-wrap; line-height: 1.6;">-</div>
+      </div>
+    </div>
+
+    <!-- Timeline / Comments -->
+    <div class="card">
+      <div style="padding: 16px 24px; border-bottom: 1px solid var(--border-subtle); background: #FAFAFB;">
+        <h3 style="font-size: 14px; font-weight: 700;">History and Activity</h3>
+      </div>
+      <div id="history-container" style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+        <!-- Dynamic timeline -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column: Admin Actions -->
+  <? if (canEdit) { ?>
+  <div style="display: flex; flex-direction: column; gap: 24px;">
+    <div class="card" style="padding: 24px;">
+      <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 20px;">Management Actions</h3>
+
+      <div class="form-group">
+        <label class="form-label">Change Status</label>
+        <select id="select-status" class="form-control"></select>
+        <button class="btn btn-primary btn-sm" onclick="updateStatus()" style="width: 100%; margin-top: 8px;">Update
+          Status</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Change Priority</label>
+        <select id="select-priority" class="form-control"></select>
+        <button class="btn btn-primary btn-sm" onclick="updatePriority()" style="width: 100%; margin-top: 8px;">Update
+          Priority</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Assign Owner</label>
+        <select id="select-owner" class="form-control">
+          <option value="">-- Unassigned --</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="updateOwner()"
+          style="width: 100%; margin-top: 8px;">Assign</button>
+      </div>
+    </div>
+
+    <div class="card" style="padding: 24px;">
+      <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 20px;">Add Comment</h3>
+      <textarea id="comment-text" class="form-control" placeholder="Write a comment..."
+        style="min-height: 100px; margin-bottom: 12px;"></textarea>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <button class="btn btn-secondary btn-sm" onclick="postComment('internal')">Private</button>
+        <button class="btn btn-primary btn-sm" onclick="postComment('employee')">Public</button>
+      </div>
+    </div>
+  </div>
+  <? } ?>
+</div>
+
+<script>
+  const ticketId = '<?= ticketId ?>';
+  const statuses = <?!= statusesJson ?>;
+  const priorities = <?!= prioritiesJson ?>;
+
+  function init() {
+    loadTicket();
+    loadHistory();
+    if (document.getElementById('select-status')) {
+      renderStatusOptions();
+      renderPriorityOptions();
+    }
+  }
+
+  function loadTicket() {
+    google.script.run.withSuccessHandler(renderTicket).getTicketDetail(ticketId);
+  }
+
+  function renderTicket(t) {
+    if (!t) return;
+    document.getElementById('ticket-subject').innerText = t.subject;
+    document.getElementById('ticket-requester').innerText = t.requesterName || t.createdByEmail;
+    document.getElementById('ticket-category').innerText = t.category;
+    document.getElementById('ticket-priority').innerText = t.priority;
+    document.getElementById('ticket-description').innerText = t.description;
+    document.getElementById('ticket-owner').innerText = t.ownerEmail || 'Unassigned';
+
+    const badge = document.getElementById('ticket-status-badge');
+    let badgeClass = 'badge-status-new';
+    if (t.status === 'In Progress') badgeClass = 'badge-status-progress';
+    if (t.status === 'Resolved' || t.status === 'Closed') badgeClass = 'badge-status-closed';
+    badge.innerHTML = `<span class="badge ${badgeClass}">${t.status}</span>`;
+
+    if (document.getElementById('select-status')) document.getElementById('select-status').value = t.status;
+    if (document.getElementById('select-priority')) document.getElementById('select-priority').value = t.priority;
+  }
+
+  function loadHistory() {
+    google.script.run.withSuccessHandler(renderHistory).getTicketEventsForDetail(ticketId);
+  }
+
+  function renderHistory(events) {
+    const container = document.getElementById('history-container');
+    container.innerHTML = '';
+
+    events.forEach(ev => {
+      const item = document.createElement('div');
+      item.style.display = 'flex';
+      item.style.gap = '16px';
+
+      let icon = '🔔';
+      if (ev.action === 'comment_internal') icon = '🔒';
+      if (ev.action === 'comment_employee') icon = '💬';
+      if (ev.action === 'status_changed') icon = '🔄';
+
+      item.innerHTML = `
+        <div style="font-size: 18px;">${icon}</div>
+        <div style="flex: 1;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span style="font-size: 13px; font-weight: 700;">${ev.actorEmail.split('@')[0]}</span>
+            <span style="font-size: 11px; color: var(--text-muted);">${new Date(ev.timestamp).toLocaleString()}</span>
+          </div>
+          <div style="font-size: 14px; color: var(--text-main); line-height: 1.4;">${formatEventMessage(ev)}</div>
+        </div>
+      `;
+      container.appendChild(item);
+    });
+  }
+
+  function formatEventMessage(ev) {
+    if (ev.action === 'comment_internal' || ev.action === 'comment_employee') return ev.comment;
+    if (ev.action === 'status_changed') return `Changed status from <b>${ev.fromValue}</b> to <b>${ev.toValue}</b>`;
+    if (ev.action === 'assigned') return `Assigned ticket to <b>${ev.toValue || 'Unassigned'}</b>`;
+    return ev.action;
+  }
+
+  function renderStatusOptions() {
+    const sel = document.getElementById('select-status');
+    statuses.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.text = s;
+      sel.appendChild(opt);
+    });
+
+    google.script.run.withSuccessHandler(admins => {
+      const oSel = document.getElementById('select-owner');
+      admins.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a;
+        opt.text = a;
+        oSel.appendChild(opt);
+      });
+    }).getPeopleAdminsForUi();
+  }
+
+  function renderPriorityOptions() {
+    const sel = document.getElementById('select-priority');
+    if (!sel) return;
+    priorities.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p;
+      opt.text = p;
+      sel.appendChild(opt);
+    });
+  }
+
+  function updateStatus() {
+    const status = document.getElementById('select-status').value;
+    google.script.run.withSuccessHandler(() => { init(); }).updateTicketStatusFromUi(ticketId, status);
+  }
+
+  function updatePriority() {
+    const priority = document.getElementById('select-priority').value;
+    google.script.run.withSuccessHandler(() => { init(); }).updateTicketPriorityFromUi(ticketId, priority);
+  }
+
+  function updateOwner() {
+    const owner = document.getElementById('select-owner').value;
+    google.script.run.withSuccessHandler(() => { init(); }).assignTicketOwnerFromUi(ticketId, owner);
+  }
+
+  function postComment(type) {
+    const text = document.getElementById('comment-text').value;
+    if (!text) return;
+    google.script.run.withSuccessHandler(() => {
+      document.getElementById('comment-text').value = '';
+      init();
+    }).addTicketCommentFromUi(ticketId, text, type);
+  }
+
+  init();
+</script>

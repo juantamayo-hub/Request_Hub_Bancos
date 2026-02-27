@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create Ticket - People Hub</title>
+  <?!= HtmlService.createHtmlOutputFromFile('Styles').getContent(); ?>
+  <style>
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      margin: 24px;
+      max-width: 560px;
+    }
+
+    h1 {
+      color: #1a73e8;
+    }
+
+    label {
+      display: block;
+      margin-top: 12px;
+      font-weight: 500;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      padding: 8px;
+      margin-top: 4px;
+      box-sizing: border-box;
+    }
+
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+
+    button {
+      margin-top: 16px;
+      padding: 10px 20px;
+      background: #1a73e8;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .msg {
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 6px;
+    }
+
+    .msg.success {
+      background: #e6f4ea;
+      color: #137333;
+    }
+
+    .msg.error {
+      background: #fce8e6;
+      color: #c5221f;
+    }
+
+    .back {
+      margin-bottom: 16px;
+    }
+
+    .back a {
+      color: #1a73e8;
+      text-decoration: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="back"><a href="<?= appUrl ?>">← Home</a></div>
+  <h1>Create Ticket</h1>
+  <form id="f">
+    <label for="category">Category *</label>
+    <select id="category" required>
+      <? for (var i = 0; i < categories.length; i++) { ?>
+      <option value="<?= categories[i] ?>">
+        <?= categories[i] ?>
+      </option>
+      <? } ?>
+    </select>
+    <label for="requesterName">Your Name (optional)</label>
+    <input type="text" id="requesterName" placeholder="To show on ticket">
+    <label for="subject">Subject *</label>
+    <input type="text" id="subject" required placeholder="Summary of request">
+    <label for="description">Description *</label>
+    <textarea id="description" required placeholder="Detail your request"></textarea>
+    <label for="priority">Priority</label>
+    <select id="priority">
+      <option value="Low">Low</option>
+      <option value="Medium" selected>Medium</option>
+      <option value="High">High</option>
+    </select>
+    <button type="submit" id="btn">Submit Ticket</button>
+  </form>
+  <div id="msg" class="msg" style="display:none;"></div>
+
+  <script>
+    document.getElementById('f').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var btn = document.getElementById('btn');
+      var msg = document.getElementById('msg');
+      btn.disabled = true;
+      msg.style.display = 'none';
+      var input = {
+        category: document.getElementById('category').value,
+        requesterName: document.getElementById('requesterName').value.trim(),
+        subject: document.getElementById('subject').value.trim(),
+        description: document.getElementById('description').value.trim(),
+        priority: document.getElementById('priority').value
+      };
+      if (!input.subject) {
+        msg.className = 'msg error';
+        msg.textContent = 'Subject is mandatory.';
+        msg.style.display = 'block';
+        btn.disabled = false;
+        return;
+      }
+      google.script.run
+        .withSuccessHandler(function (result) {
+          if (result.success) {
+            msg.className = 'msg success';
+            msg.textContent = 'Ticket created: ' + result.ticketId + '. You will receive a confirmation email.';
+            msg.style.display = 'block';
+            document.getElementById('f').reset();
+            setTimeout(function () {
+              window.location.href = '<?= appUrl ?>?page=mis-tickets';
+            }, 2000);
+          } else {
+            msg.className = 'msg error';
+            msg.textContent = result.error || 'Error creating ticket.';
+            msg.style.display = 'block';
+            btn.disabled = false;
+          }
+        })
+        .withFailureHandler(function (err) {
+          msg.className = 'msg error';
+          msg.textContent = 'Error: ' + (err.message || err);
+          msg.style.display = 'block';
+          btn.disabled = false;
+        })
+        .createTicketFromForm(input);
+    });
+  </script>
+</body>
+
+</html>
