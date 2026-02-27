@@ -38,12 +38,17 @@ export function TicketForm({ categories }: Props) {
     if (!form.description.trim()) { toast.error('Description is required.'); return }
 
     setLoading(true)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 25_000) // 25s timeout
     try {
       const res = await fetch('/api/tickets', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(form),
+        method:      'POST',
+        headers:     { 'Content-Type': 'application/json' },
+        body:        JSON.stringify(form),
+        credentials: 'include',
+        signal:      controller.signal,
       })
+      clearTimeout(timeoutId)
 
       const data = await res.json()
       if (!res.ok) {
@@ -54,8 +59,14 @@ export function TicketForm({ categories }: Props) {
       toast.success(`Ticket ${data.ticket.display_id} created!`)
       router.push(`/tickets/${data.ticket.id}`)
       router.refresh()
-    } catch {
-      toast.error('Network error. Please try again.')
+    } catch (err) {
+      clearTimeout(timeoutId)
+      const isAbort = err instanceof Error && err.name === 'AbortError'
+      if (isAbort) {
+        toast.error('Request timed out. Check your connection and try again.')
+      } else {
+        toast.error('Connection error. Check your network and try again.')
+      }
     } finally {
       setLoading(false)
     }

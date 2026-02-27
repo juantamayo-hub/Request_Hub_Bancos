@@ -24,9 +24,10 @@ export function AddCommentForm({ ticketId, isAdmin = false }: Props) {
     setLoading(true)
     try {
       const res = await fetch(`/api/tickets/${ticketId}/comments`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ body: body.trim(), visibility }),
+        method:      'POST',
+        headers:     { 'Content-Type': 'application/json' },
+        body:        JSON.stringify({ body: body.trim(), visibility }),
+        credentials: 'include',
       })
 
       const data = await res.json()
@@ -39,7 +40,7 @@ export function AddCommentForm({ ticketId, isAdmin = false }: Props) {
       setBody('')
       router.refresh()
     } catch {
-      toast.error('Network error. Please try again.')
+      toast.error('Connection error. Check your network and try again.')
     } finally {
       setLoading(false)
     }

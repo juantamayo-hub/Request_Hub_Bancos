@@ -39,9 +39,10 @@ export function AdminTicketActions({ ticket, admins }: Props) {
         payload.assignee_id = assigneeId || null
 
       const res = await fetch(`/api/admin/tickets/${ticket.id}`, {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(payload),
+        method:      'PATCH',
+        headers:     { 'Content-Type': 'application/json' },
+        body:        JSON.stringify(payload),
+        credentials: 'include',
       })
 
       const data = await res.json()
@@ -53,7 +54,7 @@ export function AdminTicketActions({ ticket, admins }: Props) {
       toast.success('Ticket updated.')
       router.refresh()
     } catch {
-      toast.error('Network error. Please try again.')
+      toast.error('Connection error. Check your network and try again.')
     } finally {
       setLoading(false)
     }
