@@ -36,10 +36,7 @@ export async function middleware(request: NextRequest) {
 
   // Not authenticated → redirect to login (except public paths)
   if (!user && !isPublic) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    url.searchParams.delete('error')
-    return NextResponse.redirect(url)
+    return NextResponse.redirect(new URL('/login', request.nextUrl.origin))
   }
 
   if (user) {
