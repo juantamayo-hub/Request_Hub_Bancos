@@ -28,15 +28,16 @@ export function Navbar({ profile, isAdmin = false }: Props) {
         {/* Logo + nav */}
         <div className="flex items-center gap-6">
           <Link
-            href={isAdmin ? '/admin/tickets' : '/tickets'}
+            href="/tickets"
             className="flex items-center gap-2.5 text-gray-900 no-underline hover:opacity-90 transition-opacity"
           >
             <Image
               src="/logo-huspy.png"
               alt="Huspy"
-              width={96}
-              height={28}
+              width={192}
+              height={56}
               className="h-7 w-auto object-contain"
+              quality={100}
               priority
             />
             <span className="text-sm font-medium text-gray-500 hidden sm:inline">People Hub</span>

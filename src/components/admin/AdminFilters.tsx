@@ -3,19 +3,17 @@
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useCallback, useTransition } from 'react'
 import { TICKET_STATUSES, TICKET_PRIORITIES } from '@/lib/constants'
-import type { Category, TicketStatus, TicketPriority } from '@/lib/database.types'
+import type { TicketStatus, TicketPriority } from '@/lib/database.types'
 
 interface Props {
-  categories: Pick<Category, 'id' | 'name'>[]
   current: {
     status?:   TicketStatus
     priority?: TicketPriority
-    category?: string
     q?:        string
   }
 }
 
-export function AdminFilters({ categories, current }: Props) {
+export function AdminFilters({ current }: Props) {
   const router     = useRouter()
   const pathname   = usePathname()
   const params     = useSearchParams()
@@ -37,7 +35,7 @@ export function AdminFilters({ categories, current }: Props) {
     startTransition(() => router.push(pathname))
   }
 
-  const hasFilters = !!(current.status || current.priority || current.category || current.q)
+  const hasFilters = !!(current.status || current.priority || current.q)
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
@@ -71,18 +69,6 @@ export function AdminFilters({ categories, current }: Props) {
         <option value="">All priorities</option>
         {TICKET_PRIORITIES.map(p => (
           <option key={p.value} value={p.value}>{p.label}</option>
-        ))}
-      </select>
-
-      {/* Category filter */}
-      <select
-        value={current.category ?? ''}
-        onChange={e => update('category', e.target.value)}
-        className="h-8 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
-      >
-        <option value="">All categories</option>
-        {categories.map(c => (
-          <option key={c.id} value={c.id}>{c.name}</option>
         ))}
       </select>
 

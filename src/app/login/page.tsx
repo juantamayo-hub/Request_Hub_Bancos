@@ -32,9 +32,10 @@ function LoginForm() {
             <Image
               src="/logo-huspy.png"
               alt="Huspy"
-              width={120}
-              height={36}
+              width={240}
+              height={72}
               className="h-9 w-auto object-contain"
+              quality={100}
               priority
             />
           </div>
