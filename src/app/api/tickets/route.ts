@@ -119,6 +119,7 @@ export async function POST(request: NextRequest) {
     subject:        ticket.subject,
     category:       categoryName,
     requesterEmail: profile.email,
+    assigneeEmail:  rule?.owner_email ?? undefined,
   }).catch(console.error)
 
   return NextResponse.json({ ticket }, { status: 201 })

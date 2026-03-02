@@ -5,13 +5,14 @@ export interface EmailMessage {
 }
 
 /**
- * Sends an email.
- * Stubs gracefully if EMAIL_PROVIDER is not set.
+ * Sends an email via Resend.
  *
- * To activate Resend:
+ * Setup:
  *   1. npm install resend
- *   2. Set EMAIL_PROVIDER=resend and RESEND_API_KEY in .env.local
- *   3. Uncomment the block below.
+ *   2. In Vercel (or .env.local) set:
+ *        EMAIL_PROVIDER=resend
+ *        RESEND_API_KEY=re_xxxxxxxxxxxx
+ *        EMAIL_FROM=noreply@huspy.io   (or a verified sender domain)
  */
 export async function sendEmail(message: EmailMessage): Promise<boolean> {
   const provider = process.env.EMAIL_PROVIDER
@@ -22,12 +23,25 @@ export async function sendEmail(message: EmailMessage): Promise<boolean> {
   }
 
   if (provider === 'resend') {
-    // const { Resend } = await import('resend')
-    // const resend = new Resend(process.env.RESEND_API_KEY)
-    // const from = process.env.EMAIL_FROM || 'noreply@huspy.io'
-    // const { error } = await resend.emails.send({ from, to: message.to, subject: message.subject, text: message.text })
-    // return !error
-    console.warn('[Email] Resend integration: uncomment the code in src/lib/notifications/email.ts')
+    try {
+      const { Resend } = await import('resend')
+      const resend = new Resend(process.env.RESEND_API_KEY)
+      const from   = process.env.EMAIL_FROM || 'noreply@huspy.io'
+      const { error } = await resend.emails.send({
+        from,
+        to:      message.to,
+        subject: message.subject,
+        text:    message.text,
+      })
+      if (error) {
+        console.error('[Email] Resend error:', error)
+        return false
+      }
+      return true
+    } catch (err) {
+      console.error('[Email] Resend send failed:', err)
+      return false
+    }
   }
 
   return false
@@ -43,6 +57,7 @@ export function buildTicketCreatedEmail(p: {
   ticketId:  string
   appUrl:    string
 }): EmailMessage {
+  const ticketUrl = `${p.appUrl}/tickets/${p.ticketId}`
   return {
     to:      p.to,
     subject: `People Hub – Ticket created: ${p.displayId}`,
@@ -53,7 +68,7 @@ export function buildTicketCreatedEmail(p: {
       `Subject:  ${p.subject}`,
       `Category: ${p.category}`,
       ``,
-      `Track status: ${p.appUrl}/tickets/${p.ticketId}`,
+      `Track your ticket: ${ticketUrl}`,
     ].join('\n'),
   }
 }
@@ -66,6 +81,7 @@ export function buildStatusChangedEmail(p: {
   ticketId:  string
   appUrl:    string
 }): EmailMessage {
+  const ticketUrl = `${p.appUrl}/tickets/${p.ticketId}`
   return {
     to:      p.to,
     subject: `People Hub – Ticket ${p.displayId} status update`,
@@ -75,7 +91,7 @@ export function buildStatusChangedEmail(p: {
       `ID:     ${p.displayId}`,
       `Status: ${p.newStatus}`,
       ``,
-      `View ticket: ${p.appUrl}/tickets/${p.ticketId}`,
+      `View ticket: ${ticketUrl}`,
     ].join('\n'),
   }
 }
