@@ -113,7 +113,23 @@ export interface AuditLogWithActor extends AuditLog {
 
 // ─── Dashboard ────────────────────────────────────────────────
 
+export interface AtRiskTicket {
+  id:        string
+  displayId: string
+  subject:   string
+  category:  string
+  deadline:  string
+  status:    'breaching' | 'at-risk'
+}
+
+export interface VelocityDay {
+  date:   string
+  opened: number
+  closed: number
+}
+
 export interface DashboardMetrics {
+  // Existing
   totalTickets:      number
   openTickets:       number
   newCount:          number
@@ -124,6 +140,15 @@ export interface DashboardMetrics {
   slaBreaching:      number
   agingTickets:      number   // open > 7 days
   avgResolutionDays: number
+  // New
+  ticketsByCategory:     { categoryId: string; name: string; count: number }[]
+  ticketsByPriority:     { priority: TicketPriority; count: number }[]
+  ageDistribution:       { bucket: '1-3d' | '3-7d' | '7d+'; count: number }[]
+  atRiskTickets:         AtRiskTicket[]
+  velocityLast7Days:     VelocityDay[]
+  prevWeekOpen:          number
+  prevWeekSlaBreaching:  number
+  prevWeekAvgResolution: number
 }
 
 // ─── API request/response shapes ─────────────────────────────
