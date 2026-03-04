@@ -144,6 +144,33 @@ export function buildTicketAssignedMessage(p: {
 }
 
 /**
+ * DM sent to a user when they are promoted to the admin role.
+ */
+export function buildAdminPromotedMessage(p: {
+  firstName: string
+  appUrl:    string
+}): SlackMessage {
+  return {
+    text: `You now have admin access to People Hub`,
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `:star: *You've been granted admin access to People Hub, ${p.firstName}!*\n\nYou can now manage tickets, users, and category ownership from the admin panel.`,
+        },
+        accessory: {
+          type: 'button',
+          style: 'primary',
+          text: { type: 'plain_text', text: 'Go to Admin' },
+          url: `${p.appUrl}/admin/tickets`,
+        },
+      },
+    ],
+  }
+}
+
+/**
  * DM sent to the requester when their ticket status changes.
  */
 export function buildStatusChangedRequesterMessage(p: {

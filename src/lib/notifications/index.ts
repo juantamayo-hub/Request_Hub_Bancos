@@ -3,6 +3,7 @@ import {
   buildTicketCreatedRequesterMessage,
   buildTicketAssignedMessage,
   buildStatusChangedRequesterMessage,
+  buildAdminPromotedMessage,
 } from './slack'
 import {
   sendEmail,
@@ -60,6 +61,20 @@ export async function notifyTicketCreated(p: {
   }
 
   await Promise.allSettled(tasks)
+}
+
+/**
+ * Fires when a user is promoted to admin.
+ * Sends a Slack DM to the new admin.
+ */
+export async function notifyAdminPromoted(p: {
+  email:     string
+  firstName: string
+}) {
+  await postSlackDM(
+    p.email,
+    buildAdminPromotedMessage({ firstName: p.firstName, appUrl: APP_URL }),
+  )
 }
 
 /**

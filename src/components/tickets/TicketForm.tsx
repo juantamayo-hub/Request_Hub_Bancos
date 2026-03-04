@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import type { Category, TicketPriority } from '@/lib/database.types'
+import type { Category, TicketPriority, SupportType } from '@/lib/database.types'
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -211,14 +211,15 @@ function fmtLabel(f: string): string {
 function buildTicketPayload(
   form: FormState,
   categories: Pick<Category, 'id' | 'name'>[],
-): { category_id: string; subcategory: string; subject: string; description: string; priority: TicketPriority } {
+): { category_id: string; subcategory: string; support_type: SupportType; subject: string; description: string; priority: TicketPriority } {
   const cat = (name: string) =>
     categories.find(c => c.name.toLowerCase() === name.toLowerCase())?.id ??
     categories[0]?.id ?? ''
 
-  let category_id = ''
-  let subcategory  = ''
-  let subject      = ''
+  let category_id  = ''
+  let subcategory   = ''
+  let support_type: SupportType = 'other'
+  let subject       = ''
   const lines: string[] = []
 
   const priority: TicketPriority =
@@ -227,7 +228,8 @@ function buildTicketPayload(
 
   switch (form.supportType) {
     case 'documents': {
-      category_id = cat('HR')
+      support_type = 'documents'
+      category_id  = cat('HR')
       switch (form.documentType) {
         case 'noc_travel':
           subcategory = 'NOC for Travel'
@@ -272,7 +274,8 @@ function buildTicketPayload(
     }
 
     case 'parking': {
-      category_id = cat('Parking')
+      support_type = 'parking'
+      category_id  = cat('Parking')
       if (form.parkingAction === 'remove') {
         subcategory = 'Parking Cancellation'
         subject     = 'Parking Cancellation Request'
@@ -291,41 +294,46 @@ function buildTicketPayload(
     }
 
     case 'health_insurance':
-      category_id = cat('HR')
-      subcategory = 'Health Insurance'
+      support_type = 'health_insurance'
+      category_id  = cat('HR')
+      subcategory  = 'Health Insurance'
       subject     = 'Health Insurance Enquiry'
       lines.push(form.healthInsuranceHelp)
       break
 
     case 'visa':
-      category_id = cat('HR')
-      subcategory = 'Visa'
+      support_type = 'visa'
+      category_id  = cat('HR')
+      subcategory  = 'Visa'
       subject     = 'Visa Support Request'
       lines.push(form.visaHelp)
       break
 
     case 'time_off':
-      category_id = cat('HR')
-      subcategory = 'Time-Off'
+      support_type = 'time_off'
+      category_id  = cat('HR')
+      subcategory  = 'Time-Off'
       subject     = 'Time-Off Request'
       lines.push(form.timeOffHelp)
       break
 
     case 'revolut':
-      category_id = cat('HR')
-      subcategory = 'Revolut Adjustment'
+      support_type = 'revolut'
+      category_id  = cat('HR')
+      subcategory  = 'Revolut Adjustment'
       subject     = 'Revolut Adjustment Request'
       lines.push(form.revolutHelp)
       break
 
     default: // other
-      category_id = cat('General')
-      subcategory = 'Other'
-      subject     = 'Support Request'
+      support_type = 'other'
+      category_id  = cat('General')
+      subcategory  = 'Other'
+      subject      = 'Support Request'
       lines.push(form.otherHelp)
   }
 
-  return { category_id, subcategory, subject, description: lines.filter(Boolean).join('\n'), priority }
+  return { category_id, subcategory, support_type, subject, description: lines.filter(Boolean).join('\n'), priority }
 }
 
 // ─── RadioGroup helper ────────────────────────────────────────

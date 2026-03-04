@@ -65,6 +65,12 @@ export function Navbar({ profile, isAdmin = false }: Props) {
                 >
                   Dashboard
                 </Link>
+                <Link
+                  href="/admin/users"
+                  className="px-3 py-1.5 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                >
+                  Users
+                </Link>
               </>
             )}
           </nav>

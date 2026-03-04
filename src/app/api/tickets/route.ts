@@ -7,7 +7,8 @@ import type { CreateTicketInput } from '@/lib/database.types'
 /**
  * POST /api/tickets
  * Creates a new ticket. Authenticated employees only.
- * Looks up the routing rule to set assignee + SLA automatically.
+ * Uses assign_ticket_owner() RPC for round-robin assignment by support_type.
+ * Falls back to routing_rules for SLA configuration.
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { category_id, subject, description, subcategory, priority, tags } = body
+  const { category_id, subject, description, subcategory, support_type, priority, tags } = body
 
   if (!category_id || !subject?.trim() || !description?.trim()) {
     return NextResponse.json(
@@ -46,29 +47,60 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // ─── Look up routing rule ─────────────────────────────────────
-  const admin = createAdminClient()
+  // ─── Admin client ─────────────────────────────────────────────
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    admin = createAdminClient()
+  } catch (err) {
+    console.error('Admin client init failed:', err)
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+  }
 
+  // ─── Round-robin owner assignment ────────────────────────────
+  // If support_type is provided, use the atomic assign_ticket_owner() RPC.
+  // Otherwise fall back to routing_rules (legacy / admin-reclassified tickets).
+  let assigneeEmail: string | null = null
+
+  if (support_type) {
+    const { data: ownerEmail, error: rpcErr } = await admin
+      .rpc('assign_ticket_owner', { p_support_type: support_type })
+
+    if (rpcErr) {
+      console.error('assign_ticket_owner RPC error:', rpcErr)
+    } else {
+      assigneeEmail = ownerEmail as string | null
+    }
+  } else {
+    // Fallback: look up routing_rules by category
+    const { data: rule } = await admin
+      .from('routing_rules')
+      .select('owner_email')
+      .eq('category_id', category_id)
+      .single()
+    assigneeEmail = rule?.owner_email ?? null
+  }
+
+  // ─── Resolve assignee email → profile id ──────────────────────
+  let assigneeId: string | null = null
+  if (assigneeEmail) {
+    const { data: assignee } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('email', assigneeEmail)
+      .single()
+    assigneeId = assignee?.id ?? null
+  }
+
+  // ─── SLA from routing_rules ───────────────────────────────────
   const { data: rule } = await admin
     .from('routing_rules')
     .select('*, categories(id, name)')
     .eq('category_id', category_id)
     .single()
 
-  // Resolve assignee by email → profile id
-  let assigneeId: string | null = null
-  if (rule?.owner_email) {
-    const { data: assignee } = await admin
-      .from('profiles')
-      .select('id')
-      .eq('email', rule.owner_email)
-      .single()
-    assigneeId = assignee?.id ?? null
-  }
-
-  const slaHours = rule?.sla_hours ?? 72
+  const slaHours      = rule?.sla_hours ?? 72
   const defaultPriority = priority ?? rule?.default_priority ?? 'medium'
-  const slaDeadline = new Date(Date.now() + slaHours * 60 * 60 * 1000).toISOString()
+  const slaDeadline   = new Date(Date.now() + slaHours * 60 * 60 * 1000).toISOString()
 
   // ─── Create ticket (use regular client so RLS created_by check fires) ─
   const { data: ticket, error: insertErr } = await supabase
@@ -78,6 +110,7 @@ export async function POST(request: NextRequest) {
       assignee_id:  assigneeId,
       category_id,
       subcategory:  subcategory ?? null,
+      support_type: support_type ?? null,
       subject:      subject.trim(),
       description:  description.trim(),
       priority:     defaultPriority,
@@ -94,7 +127,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create ticket' }, { status: 500 })
   }
 
-  // ─── Audit log (service-role only) ────────────────────────────
+  // ─── Audit log ────────────────────────────────────────────────
   await admin.from('audit_log').insert({
     ticket_id:  ticket.id,
     actor_id:   profile.id,
@@ -104,14 +137,14 @@ export async function POST(request: NextRequest) {
     metadata:   { display_id: ticket.display_id },
   })
 
-  // ─── Status history ────────────────────────────────────────────
+  // ─── Status history ───────────────────────────────────────────
   await admin.from('ticket_status_history').insert({
     ticket_id:  ticket.id,
     status:     'new',
     changed_by: profile.id,
   })
 
-  // ─── Notifications (fire-and-forget) ──────────────────────────
+  // ─── Notifications (fire-and-forget) ─────────────────────────
   const categoryName = (rule as { categories?: { name: string } } | null)?.categories?.name ?? category_id
   notifyTicketCreated({
     ticketId:       ticket.id,
@@ -119,7 +152,7 @@ export async function POST(request: NextRequest) {
     subject:        ticket.subject,
     category:       categoryName,
     requesterEmail: profile.email,
-    assigneeEmail:  rule?.owner_email ?? undefined,
+    assigneeEmail:  assigneeEmail ?? undefined,
   }).catch(console.error)
 
   return NextResponse.json({ ticket }, { status: 201 })

@@ -11,19 +11,29 @@ export type TicketPriority  = 'low' | 'medium' | 'high'
 export type UserRole        = 'employee' | 'admin'
 export type CommentVisibility = 'public' | 'internal'
 export type AuditAction     = 'created' | 'status_changed' | 'assigned' | 'priority_changed' | 'comment_added' | 'updated'
+export type SupportType     = 'documents' | 'visa' | 'health_insurance' | 'parking' | 'time_off' | 'revolut' | 'other'
 
 // ─── Table row types ──────────────────────────────────────────
 
 export interface Profile {
-  id:          string
-  email:       string
-  first_name:  string | null
-  last_name:   string | null
-  role:        UserRole
-  department:  string | null
-  avatar_url:  string | null
-  created_at:  string
-  updated_at:  string
+  id:           string
+  email:        string
+  first_name:   string | null
+  last_name:    string | null
+  role:         UserRole
+  department:   string | null
+  avatar_url:   string | null
+  is_available: boolean
+  created_at:   string
+  updated_at:   string
+}
+
+export interface SupportTypeOwner {
+  id:           string
+  support_type: SupportType
+  owner_email:  string
+  sort_order:   number
+  created_at:   string
 }
 
 export interface Category {
@@ -52,6 +62,7 @@ export interface Ticket {
   assignee_id:  string | null
   category_id:  string
   subcategory:  string | null
+  support_type: SupportType | null
   subject:      string
   description:  string
   priority:     TicketPriority
@@ -154,12 +165,13 @@ export interface DashboardMetrics {
 // ─── API request/response shapes ─────────────────────────────
 
 export interface CreateTicketInput {
-  category_id:  string
-  subcategory?: string
-  subject:      string
-  description:  string
-  priority?:    TicketPriority
-  tags?:        string[]
+  category_id:   string
+  subcategory?:  string
+  support_type?: SupportType
+  subject:       string
+  description:   string
+  priority?:     TicketPriority
+  tags?:         string[]
 }
 
 export interface UpdateTicketInput {
