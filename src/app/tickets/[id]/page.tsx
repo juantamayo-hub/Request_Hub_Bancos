@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { Navbar } from '@/components/layout/Navbar'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { PriorityBadge } from '@/components/shared/PriorityBadge'
@@ -36,11 +37,38 @@ export default async function TicketDetailPage({ params }: Props) {
   if (!ticket) notFound()
 
   // RLS also filters internal comments for non-admins.
-  const { data: comments } = await supabase
+  const { data: rawComments } = await supabase
     .from('ticket_comments')
     .select(`*, profiles(id, email, first_name, last_name, avatar_url)`)
     .eq('ticket_id', id)
     .order('created_at', { ascending: true })
+
+  // Fetch attachments and generate signed URLs (service-role bypasses RLS)
+  const adminClient = createAdminClient()
+  const commentIds = (rawComments ?? []).map(c => c.id)
+  const rawAttachments = commentIds.length > 0
+    ? (await adminClient.from('comment_attachments').select('*').in('comment_id', commentIds)).data ?? []
+    : []
+
+  const attachmentsByComment: Record<string, typeof rawAttachments> = {}
+  for (const att of rawAttachments) {
+    if (!attachmentsByComment[att.comment_id]) attachmentsByComment[att.comment_id] = []
+    attachmentsByComment[att.comment_id]!.push(att)
+  }
+
+  // Generate signed URLs for all attachments
+  const comments: TicketCommentWithAuthor[] = await Promise.all(
+    (rawComments ?? []).map(async comment => {
+      const atts = attachmentsByComment[comment.id] ?? []
+      const withUrls = await Promise.all(atts.map(async att => {
+        const { data } = await adminClient.storage
+          .from('comment-attachments')
+          .createSignedUrl(att.file_path, 3600)  // 1 hour
+        return { ...att, signedUrl: data?.signedUrl ?? '' }
+      }))
+      return { ...comment, attachments: withUrls } as TicketCommentWithAuthor
+    })
+  )
 
   const t = ticket as TicketWithRelations
 
@@ -108,7 +136,7 @@ export default async function TicketDetailPage({ params }: Props) {
           <div className="card p-6">
             <h2 className="font-semibold text-gray-900 mb-4">Activity</h2>
             <CommentThread
-              comments={(comments ?? []) as TicketCommentWithAuthor[]}
+              comments={comments}
               currentProfileId={profile.id}
             />
             <div className="mt-4 pt-4 border-t border-gray-100">

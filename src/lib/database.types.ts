@@ -114,8 +114,31 @@ export interface TicketWithRelations extends Ticket {
   assignee:   ProfileSummary | null
 }
 
+export interface CommentAttachment {
+  id:         string
+  comment_id: string
+  ticket_id:  string
+  file_name:  string
+  file_path:  string
+  file_size:  number
+  mime_type:  string
+  uploaded_by: string
+  created_at: string
+  signedUrl?: string  // populated server-side before passing to components
+}
+
+export interface TicketFeedback {
+  id:              string
+  ticket_id:       string
+  requester_email: string
+  satisfied:       boolean
+  comment:         string | null
+  created_at:      string
+}
+
 export interface TicketCommentWithAuthor extends TicketComment {
-  profiles: ProfileSummary
+  profiles:    ProfileSummary
+  attachments?: CommentAttachment[]
 }
 
 export interface AuditLogWithActor extends AuditLog {

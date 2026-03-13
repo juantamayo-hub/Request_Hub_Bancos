@@ -41,7 +41,13 @@ export async function PATCH(
   }
 
   // ─── Fetch current ticket (using admin client to bypass RLS edge cases) ─
-  const admin = createAdminClient()
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    admin = createAdminClient()
+  } catch (err) {
+    console.error('Admin client init failed:', err)
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+  }
 
   const { data: current, error: fetchErr } = await admin
     .from('tickets')

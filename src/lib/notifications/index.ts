@@ -3,6 +3,7 @@ import {
   buildTicketCreatedRequesterMessage,
   buildTicketAssignedMessage,
   buildStatusChangedRequesterMessage,
+  buildTicketClosedFeedbackMessage,
   buildAdminPromotedMessage,
 } from './slack'
 import {
@@ -91,17 +92,23 @@ export async function notifyStatusChanged(p: {
   updatedBy:      string
   requesterEmail: string
 }) {
-  await Promise.allSettled([
-    postSlackDM(
-      p.requesterEmail,
-      buildStatusChangedRequesterMessage({
+  // When closing a ticket, send a separate feedback DM instead of (or in addition to) the status update
+  const slackMessage = p.newStatus === 'closed'
+    ? buildTicketClosedFeedbackMessage({
+        displayId: p.displayId,
+        subject:   p.subject,
+        ticketId:  p.ticketId,
+      })
+    : buildStatusChangedRequesterMessage({
         displayId: p.displayId,
         subject:   p.subject,
         newStatus: p.newStatus,
         ticketId:  p.ticketId,
         appUrl:    APP_URL,
-      }),
-    ),
+      })
+
+  await Promise.allSettled([
+    postSlackDM(p.requesterEmail, slackMessage),
     sendEmail(buildStatusChangedEmail({
       to:        p.requesterEmail,
       displayId: p.displayId,

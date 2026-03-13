@@ -114,7 +114,7 @@ const STEP_INFO: Record<Step, { title: string; description?: string }> = {
     title: 'Health Insurance',
     description: 'Reminder: to check your network, download the "MyNas" app and sign in using your Emirates ID details.',
   },
-  visa: { title: 'Visa' },
+  visa: { title: 'Visa Queries' },
   time_off: { title: 'Time-Off' },
   revolut: { title: 'Revolut Adjustments', description: 'Update of any personal or job information.' },
   other_support: { title: 'Other Support' },
@@ -304,8 +304,8 @@ function buildTicketPayload(
     case 'visa':
       support_type = 'visa'
       category_id  = cat('HR')
-      subcategory  = 'Visa'
-      subject     = 'Visa Support Request'
+      subcategory  = 'Visa Queries'
+      subject     = 'Visa Queries Support Request'
       lines.push(form.visaHelp)
       break
 
@@ -502,7 +502,7 @@ export function TicketForm({ categories }: Props) {
           onChange={setVal('supportType')}
           options={[
             { value: 'documents',        label: 'Documents',          description: 'Salary Certificate, Payslip, NOCs, Labor Card and letters of any kind' },
-            { value: 'visa',             label: 'Visa' },
+            { value: 'visa',             label: 'Visa Queries' },
             { value: 'health_insurance', label: 'Health Insurance' },
             { value: 'parking',          label: 'Parking',            description: 'Apply, remove or update car' },
             { value: 'time_off',         label: 'Time-Off',           description: 'Vacation adjustments and other leaves' },

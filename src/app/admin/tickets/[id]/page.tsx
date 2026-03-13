@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { Navbar } from '@/components/layout/Navbar'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { PriorityBadge } from '@/components/shared/PriorityBadge'
@@ -55,10 +56,35 @@ export default async function AdminTicketDetailPage({ params }: Props) {
 
   if (!ticketRes.data) notFound()
 
-  const t       = ticketRes.data as TicketWithRelations
-  const comments = (commentsRes.data ?? []) as TicketCommentWithAuthor[]
-  const audit    = (auditRes.data ?? []) as AuditLogWithActor[]
-  const admins   = (adminsRes.data ?? []) as Pick<Profile, 'id' | 'email' | 'first_name' | 'last_name'>[]
+  const t     = ticketRes.data as TicketWithRelations
+  const audit = (auditRes.data ?? []) as AuditLogWithActor[]
+  const admins = (adminsRes.data ?? []) as Pick<Profile, 'id' | 'email' | 'first_name' | 'last_name'>[]
+
+  // Fetch attachments and generate signed URLs
+  const adminClient = createAdminClient()
+  const commentIds = (commentsRes.data ?? []).map((c: { id: string }) => c.id)
+  const rawAttachments = commentIds.length > 0
+    ? (await adminClient.from('comment_attachments').select('*').in('comment_id', commentIds)).data ?? []
+    : []
+
+  const attachmentsByComment: Record<string, typeof rawAttachments> = {}
+  for (const att of rawAttachments) {
+    if (!attachmentsByComment[att.comment_id]) attachmentsByComment[att.comment_id] = []
+    attachmentsByComment[att.comment_id]!.push(att)
+  }
+
+  const comments: TicketCommentWithAuthor[] = await Promise.all(
+    (commentsRes.data ?? []).map(async (comment: Record<string, unknown>) => {
+      const atts = attachmentsByComment[comment.id as string] ?? []
+      const withUrls = await Promise.all(atts.map(async att => {
+        const { data } = await adminClient.storage
+          .from('comment-attachments')
+          .createSignedUrl(att.file_path, 3600)
+        return { ...att, signedUrl: data?.signedUrl ?? '' }
+      }))
+      return { ...comment, attachments: withUrls } as TicketCommentWithAuthor
+    })
+  )
 
   return (
     <div className="min-h-screen bg-gray-50">

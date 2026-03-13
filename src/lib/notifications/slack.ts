@@ -171,6 +171,52 @@ export function buildAdminPromotedMessage(p: {
 }
 
 /**
+ * DM sent to the requester when their ticket is closed.
+ * Includes interactive 👍/👎 buttons to collect satisfaction feedback.
+ *
+ * Requires Slack app to have Interactivity enabled with Request URL:
+ *   https://<app-url>/api/slack/interactions
+ */
+export function buildTicketClosedFeedbackMessage(p: {
+  displayId: string
+  subject:   string
+  ticketId:  string
+}): SlackMessage {
+  return {
+    text: `Tu ticket ${p.displayId} ha sido cerrado. ¿Estás satisfecho con la resolución?`,
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `:white_check_mark: *Tu ticket ha sido cerrado*\n*${p.displayId}* — ${p.subject}\n\n¿Estás satisfecho con la resolución?`,
+        },
+      },
+      {
+        type: 'actions',
+        block_id: `feedback_${p.ticketId}`,
+        elements: [
+          {
+            type:      'button',
+            style:     'primary',
+            text:      { type: 'plain_text', text: '👍 Satisfecho', emoji: true },
+            action_id: 'feedback_satisfied',
+            value:     p.ticketId,
+          },
+          {
+            type:      'button',
+            style:     'danger',
+            text:      { type: 'plain_text', text: '👎 No satisfecho', emoji: true },
+            action_id: 'feedback_unsatisfied',
+            value:     p.ticketId,
+          },
+        ],
+      },
+    ],
+  }
+}
+
+/**
  * DM sent to the requester when their ticket status changes.
  */
 export function buildStatusChangedRequesterMessage(p: {

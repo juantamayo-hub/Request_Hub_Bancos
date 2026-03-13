@@ -147,7 +147,8 @@ export default async function DashboardPage() {
     'Salary Certificate':   'Documents',
     'Payslips':             'Documents',
     'Other Document':       'Documents',
-    'Visa':                 'Visa',
+    'Visa':                 'Visa Queries',
+    'Visa Queries':         'Visa Queries',
     'Health Insurance':     'Health Insurance',
     'Parking Application':  'Parking',
     'Parking Update':       'Parking',
@@ -157,7 +158,7 @@ export default async function DashboardPage() {
     'Other':                'Other',
   }
   const SUPPORT_TYPES = [
-    'Documents', 'Visa', 'Health Insurance', 'Parking', 'Time-Off', 'Revolut Adjustments', 'Other',
+    'Documents', 'Visa Queries', 'Health Insurance', 'Parking', 'Time-Off', 'Revolut Adjustments', 'Other',
   ]
   const supportTypeCounts: Record<string, number> = Object.fromEntries(
     SUPPORT_TYPES.map(t => [t, 0]),

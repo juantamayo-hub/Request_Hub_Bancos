@@ -10,7 +10,7 @@ import type { Profile, SupportTypeOwner, SupportType } from '@/lib/database.type
 
 const SUPPORT_TYPES: { key: SupportType; label: string }[] = [
   { key: 'documents',        label: 'Documents' },
-  { key: 'visa',             label: 'Visa' },
+  { key: 'visa',             label: 'Visa Queries' },
   { key: 'health_insurance', label: 'Health Insurance' },
   { key: 'parking',          label: 'Parking' },
   { key: 'time_off',         label: 'Time Off' },
