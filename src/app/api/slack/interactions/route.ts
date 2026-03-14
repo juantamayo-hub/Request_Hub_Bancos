@@ -138,8 +138,8 @@ export async function POST(request: NextRequest) {
     const requesterEmail = await getUserEmail(payload.user.id) ?? ''
 
     const sentimentText = satisfied
-      ? ':thumbsup: *Satisfecho*\n¿Tienes algún comentario adicional? (opcional)'
-      : ':thumbsdown: *No satisfecho*\n¿Qué podría haber sido mejor? (opcional)'
+      ? ':thumbsup: *Satisfied*\nAny additional comments? (optional)'
+      : ':thumbsdown: *Not satisfied*\nWhat could have been better? (optional)'
 
     await slackApi('views.open', {
       trigger_id: payload.trigger_id,
@@ -152,9 +152,9 @@ export async function POST(request: NextRequest) {
           requesterEmail,
           response_url: payload.response_url,
         }),
-        title:  { type: 'plain_text', text: 'Tu feedback' },
-        submit: { type: 'plain_text', text: 'Enviar' },
-        close:  { type: 'plain_text', text: 'Cancelar' },
+        title:  { type: 'plain_text', text: 'Your feedback' },
+        submit: { type: 'plain_text', text: 'Submit' },
+        close:  { type: 'plain_text', text: 'Cancel' },
         blocks: [
           {
             type: 'section',
@@ -164,12 +164,12 @@ export async function POST(request: NextRequest) {
             type:      'input',
             block_id:  'comment_block',
             optional:  true,
-            label:     { type: 'plain_text', text: 'Comentario' },
+            label:     { type: 'plain_text', text: 'Comment' },
             element: {
               type:        'plain_text_input',
               action_id:   'comment_input',
               multiline:   true,
-              placeholder: { type: 'plain_text', text: 'Escribe tu comentario aquí...' },
+              placeholder: { type: 'plain_text', text: 'Write your comment here...' },
             },
           },
         ],
@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
 
     // Update the original Slack message to remove buttons and confirm receipt
     if (meta.response_url) {
-      const sentimentLabel = meta.satisfied ? '👍 Satisfecho' : '👎 No satisfecho'
+      const sentimentLabel = meta.satisfied ? '👍 Satisfied' : '👎 Not satisfied'
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
       const ticketUrl = `${appUrl}/tickets/${meta.ticketId}`
       fetch(meta.response_url, {
@@ -215,17 +215,17 @@ export async function POST(request: NextRequest) {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
           replace_original: true,
-          text:             '✅ Feedback recibido. ¡Gracias!',
+          text:             '✅ Feedback received. Thank you!',
           blocks: [
             {
               type: 'section',
               text: {
                 type: 'mrkdwn',
-                text: `:white_check_mark: *Feedback recibido* — ${sentimentLabel}\n\nGracias por tomarte un momento para responder. Tu opinión nos ayuda a mejorar.`,
+                text: `:white_check_mark: *Feedback received* — ${sentimentLabel}\n\nThank you for taking a moment to respond. Your input helps us improve.`,
               },
               accessory: {
                 type:  'button',
-                text:  { type: 'plain_text', text: 'Ver Ticket' },
+                text:  { type: 'plain_text', text: 'View Ticket' },
                 url:   ticketUrl,
               },
             },

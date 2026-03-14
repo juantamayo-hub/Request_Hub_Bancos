@@ -185,13 +185,13 @@ export function buildTicketClosedFeedbackMessage(p: {
 }): SlackMessage {
   const url = `${p.appUrl}/tickets/${p.ticketId}`
   return {
-    text: `Tu ticket ${p.displayId} ha sido cerrado. ¿Estás satisfecho con la resolución?`,
+    text: `Your ticket ${p.displayId} has been closed. Are you satisfied with the resolution?`,
     blocks: [
       {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `:white_check_mark: *Tu ticket ha sido cerrado*\n*${p.displayId}* — ${p.subject}\n\n¿Estás satisfecho con la resolución?`,
+          text: `:white_check_mark: *Your ticket has been closed*\n*${p.displayId}* — ${p.subject}\n\nAre you satisfied with the resolution?`,
         },
       },
       {
@@ -201,14 +201,14 @@ export function buildTicketClosedFeedbackMessage(p: {
           {
             type:      'button',
             style:     'primary',
-            text:      { type: 'plain_text', text: '👍 Satisfecho', emoji: true },
+            text:      { type: 'plain_text', text: '👍 Satisfied', emoji: true },
             action_id: 'feedback_satisfied',
             value:     p.ticketId,
           },
           {
             type:      'button',
             style:     'danger',
-            text:      { type: 'plain_text', text: '👎 No satisfecho', emoji: true },
+            text:      { type: 'plain_text', text: '👎 Not satisfied', emoji: true },
             action_id: 'feedback_unsatisfied',
             value:     p.ticketId,
           },
