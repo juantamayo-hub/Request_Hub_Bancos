@@ -157,7 +157,7 @@ export async function POST(
       const rawP  = ticket.profiles as { email: string } | { email: string }[] | null
       const email = rawP ? (Array.isArray(rawP) ? rawP[0]?.email : rawP.email) ?? '' : ''
       if (email) {
-        notifyNewComment({
+        await notifyNewComment({
           ticketId:       id,
           displayId:      ticket.display_id,
           subject:        ticket.subject,

@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
 
   // ─── Notifications (fire-and-forget) ─────────────────────────
   const categoryName = (rule as { categories?: { name: string } } | null)?.categories?.name ?? category_id
-  notifyTicketCreated({
+  await notifyTicketCreated({
     ticketId:       ticket.id,
     displayId:      ticket.display_id,
     subject:        ticket.subject,

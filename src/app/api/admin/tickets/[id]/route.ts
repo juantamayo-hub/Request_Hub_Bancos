@@ -144,7 +144,7 @@ export async function PATCH(
       const rawCats = (current as unknown as { categories: { name: string } | null }).categories
       const categoryName = rawCats?.name ?? ''
 
-      notifyAssigned({
+      await notifyAssigned({
         ticketId:       id,
         displayId:      current.display_id,
         subject:        current.subject,
@@ -171,7 +171,7 @@ export async function PATCH(
       ? (Array.isArray(rawProfiles) ? rawProfiles[0]?.email : rawProfiles.email) ?? ''
       : ''
 
-    notifyStatusChanged({
+    await notifyStatusChanged({
       ticketId:       id,
       displayId:      current.display_id,
       subject:        current.subject,
