@@ -158,6 +158,7 @@ export async function notifyStatusChanged(p: {
         displayId: p.displayId,
         subject:   p.subject,
         ticketId:  p.ticketId,
+        appUrl:    APP_URL,
       })
     : buildStatusChangedRequesterMessage({
         displayId: p.displayId,
