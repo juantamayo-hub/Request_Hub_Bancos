@@ -2,6 +2,7 @@ import {
   postSlackDM,
   buildTicketCreatedRequesterMessage,
   buildTicketAssignedMessage,
+  buildNewCommentMessage,
   buildStatusChangedRequesterMessage,
   buildTicketClosedFeedbackMessage,
   buildAdminPromotedMessage,
@@ -9,6 +10,7 @@ import {
 import {
   sendEmail,
   buildTicketCreatedEmail,
+  buildNewCommentEmail,
   buildStatusChangedEmail,
 } from './email'
 
@@ -75,6 +77,64 @@ export async function notifyAdminPromoted(p: {
   await postSlackDM(
     p.email,
     buildAdminPromotedMessage({ firstName: p.firstName, appUrl: APP_URL }),
+  )
+}
+
+/**
+ * Fires when an admin adds a public comment on a ticket.
+ * Notifies the requester via Slack DM and email.
+ */
+export async function notifyNewComment(p: {
+  ticketId:       string
+  displayId:      string
+  subject:        string
+  commentPreview: string
+  requesterEmail: string
+}) {
+  await Promise.allSettled([
+    postSlackDM(
+      p.requesterEmail,
+      buildNewCommentMessage({
+        displayId:      p.displayId,
+        subject:        p.subject,
+        commentPreview: p.commentPreview,
+        ticketId:       p.ticketId,
+        appUrl:         APP_URL,
+      }),
+    ),
+    sendEmail(buildNewCommentEmail({
+      to:             p.requesterEmail,
+      displayId:      p.displayId,
+      subject:        p.subject,
+      commentPreview: p.commentPreview,
+      ticketId:       p.ticketId,
+      appUrl:         APP_URL,
+    })),
+  ])
+}
+
+/**
+ * Fires when a ticket is (re)assigned to a new assignee.
+ * Sends a Slack DM to the new assignee.
+ */
+export async function notifyAssigned(p: {
+  ticketId:       string
+  displayId:      string
+  subject:        string
+  category:       string
+  requesterEmail: string
+  assigneeEmail:  string
+}) {
+  await postSlackDM(
+    p.assigneeEmail,
+    buildTicketAssignedMessage({
+      displayId:      p.displayId,
+      subject:        p.subject,
+      category:       p.category,
+      requesterEmail: p.requesterEmail,
+      ticketId:       p.ticketId,
+      appUrl:         APP_URL,
+    }),
   )
 }
 

@@ -80,6 +80,11 @@ export async function POST(request: NextRequest) {
     assigneeEmail = rule?.owner_email ?? null
   }
 
+  // ─── Fallback to Maryam if no assignee was resolved ──────────
+  if (!assigneeEmail) {
+    assigneeEmail = 'maryam.mesforoush@huspy.io'
+  }
+
   // ─── Resolve assignee email → profile id ──────────────────────
   let assigneeId: string | null = null
   if (assigneeEmail) {

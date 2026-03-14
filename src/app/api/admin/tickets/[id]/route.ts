@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { notifyStatusChanged } from '@/lib/notifications'
+import { notifyStatusChanged, notifyAssigned } from '@/lib/notifications'
 import type { UpdateTicketInput, TicketStatus } from '@/lib/database.types'
 
 /**
@@ -51,7 +51,7 @@ export async function PATCH(
 
   const { data: current, error: fetchErr } = await admin
     .from('tickets')
-    .select('id, display_id, subject, status, priority, assignee_id, profiles!tickets_created_by_fkey(email)')
+    .select('id, display_id, subject, status, priority, assignee_id, profiles!tickets_created_by_fkey(email), categories(name)')
     .eq('id', id)
     .single()
 
@@ -126,6 +126,33 @@ export async function PATCH(
   // ─── Audit log ────────────────────────────────────────────────
   if (auditEntries.length > 0) {
     await admin.from('audit_log').insert(auditEntries)
+  }
+
+  // ─── Assignee notification ────────────────────────────────────
+  if ('assignee_id' in body && body.assignee_id && body.assignee_id !== current.assignee_id) {
+    const { data: newAssignee } = await admin
+      .from('profiles')
+      .select('email')
+      .eq('id', body.assignee_id)
+      .single()
+
+    if (newAssignee?.email) {
+      const rawProfiles2 = (current as unknown as { profiles: { email: string } | { email: string }[] | null }).profiles
+      const requesterEmail = rawProfiles2
+        ? (Array.isArray(rawProfiles2) ? rawProfiles2[0]?.email : rawProfiles2.email) ?? ''
+        : ''
+      const rawCats = (current as unknown as { categories: { name: string } | null }).categories
+      const categoryName = rawCats?.name ?? ''
+
+      notifyAssigned({
+        ticketId:       id,
+        displayId:      current.display_id,
+        subject:        current.subject,
+        category:       categoryName,
+        requesterEmail,
+        assigneeEmail:  newAssignee.email,
+      }).catch(console.error)
+    }
   }
 
   // ─── Status history ────────────────────────────────────────────

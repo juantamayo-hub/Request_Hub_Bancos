@@ -23,7 +23,7 @@ export default async function AdminTicketDetailPage({ params }: Props) {
   const profile  = await requireProfile()
   const supabase = await createClient()
 
-  const [ticketRes, commentsRes, auditRes, adminsRes] = await Promise.all([
+  const [ticketRes, commentsRes, auditRes, adminsRes, feedbackRes] = await Promise.all([
     supabase
       .from('tickets')
       .select(`
@@ -52,13 +52,20 @@ export default async function AdminTicketDetailPage({ params }: Props) {
       .from('profiles')
       .select('id, email, first_name, last_name')
       .eq('role', 'admin'),
+
+    createAdminClient()
+      .from('ticket_feedback')
+      .select('satisfied, comment, created_at')
+      .eq('ticket_id', id)
+      .maybeSingle(),
   ])
 
   if (!ticketRes.data) notFound()
 
-  const t     = ticketRes.data as TicketWithRelations
-  const audit = (auditRes.data ?? []) as AuditLogWithActor[]
-  const admins = (adminsRes.data ?? []) as Pick<Profile, 'id' | 'email' | 'first_name' | 'last_name'>[]
+  const t        = ticketRes.data as TicketWithRelations
+  const audit    = (auditRes.data ?? []) as AuditLogWithActor[]
+  const admins   = (adminsRes.data ?? []) as Pick<Profile, 'id' | 'email' | 'first_name' | 'last_name'>[]
+  const feedback = feedbackRes.data as { satisfied: boolean; comment: string | null; created_at: string } | null
 
   // Fetch attachments and generate signed URLs
   const adminClient = createAdminClient()
@@ -151,6 +158,25 @@ export default async function AdminTicketDetailPage({ params }: Props) {
                 <AddCommentForm ticketId={id} isAdmin />
               </div>
             </div>
+
+            {/* Satisfaction feedback */}
+            {feedback && (
+              <div className="card p-6 mb-6">
+                <h2 className="font-semibold text-gray-900 mb-3">Satisfaction Feedback</h2>
+                <div className="flex items-center gap-3">
+                  <span className={`text-2xl`}>{feedback.satisfied ? '👍' : '👎'}</span>
+                  <div>
+                    <p className="font-medium text-sm">{feedback.satisfied ? 'Satisfecho' : 'No satisfecho'}</p>
+                    <p className="text-xs text-gray-400">{formatDate(feedback.created_at)}</p>
+                  </div>
+                </div>
+                {feedback.comment && (
+                  <p className="mt-3 text-sm text-gray-600 bg-gray-50 rounded p-3 italic">
+                    &ldquo;{feedback.comment}&rdquo;
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Audit log */}
             <div className="card p-6">

@@ -208,6 +208,8 @@ export async function POST(request: NextRequest) {
     // Update the original Slack message to remove buttons and confirm receipt
     if (meta.response_url) {
       const sentimentLabel = meta.satisfied ? '👍 Satisfecho' : '👎 No satisfecho'
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+      const ticketUrl = `${appUrl}/tickets/${meta.ticketId}`
       fetch(meta.response_url, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -220,6 +222,11 @@ export async function POST(request: NextRequest) {
               text: {
                 type: 'mrkdwn',
                 text: `:white_check_mark: *Feedback recibido* — ${sentimentLabel}\n\nGracias por tomarte un momento para responder. Tu opinión nos ayuda a mejorar.`,
+              },
+              accessory: {
+                type:  'button',
+                text:  { type: 'plain_text', text: 'Ver Ticket' },
+                url:   ticketUrl,
               },
             },
           ],

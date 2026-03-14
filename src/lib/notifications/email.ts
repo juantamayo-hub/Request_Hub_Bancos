@@ -73,6 +73,34 @@ export function buildTicketCreatedEmail(p: {
   }
 }
 
+export function buildNewCommentEmail(p: {
+  to:            string
+  displayId:     string
+  subject:       string
+  commentPreview: string
+  ticketId:      string
+  appUrl:        string
+}): EmailMessage {
+  const ticketUrl = `${p.appUrl}/tickets/${p.ticketId}`
+  const preview   = p.commentPreview.length > 300
+    ? p.commentPreview.slice(0, 300) + '…'
+    : p.commentPreview
+  return {
+    to:      p.to,
+    subject: `People Hub – New comment on ${p.displayId}`,
+    text: [
+      `The People Team added a comment on your ticket.`,
+      ``,
+      `ID:      ${p.displayId}`,
+      `Subject: ${p.subject}`,
+      ``,
+      preview,
+      ``,
+      `View ticket: ${ticketUrl}`,
+    ].join('\n'),
+  }
+}
+
 export function buildStatusChangedEmail(p: {
   to:        string
   displayId: string

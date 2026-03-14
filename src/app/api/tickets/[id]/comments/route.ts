@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { notifyNewComment } from '@/lib/notifications'
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
@@ -141,6 +142,29 @@ export async function POST(
 
     if (!attachErr && attachmentRecord) {
       attachments.push(attachmentRecord)
+    }
+  }
+
+  // ─── Notify requester if public comment from someone else ────
+  if (effectiveVisibility === 'public') {
+    const { data: ticket } = await admin
+      .from('tickets')
+      .select('display_id, subject, created_by, profiles!tickets_created_by_fkey(email)')
+      .eq('id', id)
+      .single()
+
+    if (ticket && ticket.created_by !== profile.id) {
+      const rawP  = ticket.profiles as { email: string } | { email: string }[] | null
+      const email = rawP ? (Array.isArray(rawP) ? rawP[0]?.email : rawP.email) ?? '' : ''
+      if (email) {
+        notifyNewComment({
+          ticketId:       id,
+          displayId:      ticket.display_id,
+          subject:        ticket.subject,
+          commentPreview: commentBody.trim(),
+          requesterEmail: email,
+        }).catch(console.error)
+      }
     }
   }
 

@@ -217,6 +217,40 @@ export function buildTicketClosedFeedbackMessage(p: {
 }
 
 /**
+ * DM sent to the requester when an admin adds a public comment on their ticket.
+ */
+export function buildNewCommentMessage(p: {
+  displayId:     string
+  subject:       string
+  commentPreview: string
+  ticketId:      string
+  appUrl:        string
+}): SlackMessage {
+  const url     = `${p.appUrl}/tickets/${p.ticketId}`
+  const preview = p.commentPreview.length > 200
+    ? p.commentPreview.slice(0, 200) + '…'
+    : p.commentPreview
+  return {
+    text: `New comment on ticket ${p.displayId}`,
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `:speech_balloon: *New comment on your ticket*\n*${p.displayId}* — ${p.subject}\n\n>${preview}`,
+        },
+        accessory: {
+          type:  'button',
+          style: 'primary',
+          text:  { type: 'plain_text', text: 'View Ticket' },
+          url,
+        },
+      },
+    ],
+  }
+}
+
+/**
  * DM sent to the requester when their ticket status changes.
  */
 export function buildStatusChangedRequesterMessage(p: {

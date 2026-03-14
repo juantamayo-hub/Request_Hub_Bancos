@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 const ALLOWED_DOMAIN = process.env.NEXT_PUBLIC_ALLOWED_DOMAIN ?? 'huspy.io'
 
 // Paths that don't require authentication
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/unauthorized']
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/unauthorized', '/api/slack/']
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request })
