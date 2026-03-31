@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { notifyStatusChanged, notifyAssigned } from '@/lib/notifications'
+import { notifyStatusChanged, notifyAssigned, notifyTicketCancelled } from '@/lib/notifications'
 import type { UpdateTicketInput, TicketStatus } from '@/lib/database.types'
 
 /**
@@ -33,11 +33,16 @@ export async function PATCH(
   }
 
   // ─── Parse body ───────────────────────────────────────────────
-  let body: UpdateTicketInput
+  let body: UpdateTicketInput & { cancel_reason?: string }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  // Cancellation requires a reason
+  if (body.status === 'resolved' && !body.cancel_reason?.trim()) {
+    return NextResponse.json({ error: 'Se requiere una razón para cancelar la solicitud.' }, { status: 400 })
   }
 
   // ─── Fetch current ticket (using admin client to bypass RLS edge cases) ─
@@ -163,23 +168,39 @@ export async function PATCH(
       changed_by: profile.id,
     })
 
-    // Notifications (fire-and-forget)
-    // Supabase returns the FK-joined relation as an object (1:1) or array.
-    // Cast through unknown to safely access the nested email field.
     const rawProfiles = (current as unknown as { profiles: { email: string } | { email: string }[] | null }).profiles
     const requesterEmail = rawProfiles
       ? (Array.isArray(rawProfiles) ? rawProfiles[0]?.email : rawProfiles.email) ?? ''
       : ''
 
-    await notifyStatusChanged({
-      ticketId:       id,
-      displayId:      current.display_id,
-      subject:        current.subject,
-      oldStatus:      current.status,
-      newStatus:      body.status,
-      updatedBy:      profile.email,
-      requesterEmail,
-    }).catch(console.error)
+    if (body.status === 'resolved' && body.cancel_reason?.trim()) {
+      // Save cancellation reason as internal comment
+      await admin.from('ticket_comments').insert({
+        ticket_id:  id,
+        author_id:  profile.id,
+        body:       `[Cancelación] ${body.cancel_reason.trim()}`,
+        visibility: 'internal',
+      })
+
+      // Notify requester with specific cancellation message
+      await notifyTicketCancelled({
+        ticketId:       id,
+        displayId:      current.display_id,
+        subject:        current.subject,
+        cancelReason:   body.cancel_reason.trim(),
+        requesterEmail,
+      }).catch(console.error)
+    } else {
+      await notifyStatusChanged({
+        ticketId:       id,
+        displayId:      current.display_id,
+        subject:        current.subject,
+        oldStatus:      current.status,
+        newStatus:      body.status,
+        updatedBy:      profile.email,
+        requesterEmail,
+      }).catch(console.error)
+    }
   }
 
   return NextResponse.json({ ticket: updated })

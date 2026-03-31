@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { Navbar } from '@/components/layout/Navbar'
@@ -7,20 +8,69 @@ import { SLAHealthRing } from '@/components/dashboard/SLAHealthRing'
 import { AgingDistribution } from '@/components/dashboard/AgingDistribution'
 import { AtRiskTicketList } from '@/components/dashboard/AtRiskTicketList'
 import { StatusPipeline } from '@/components/dashboard/StatusPipeline'
-import { CategoryWorkload } from '@/components/dashboard/CategoryWorkload'
+import { OperationsBreakdown } from '@/components/dashboard/OperationsBreakdown'
 import { PriorityDistribution } from '@/components/dashboard/PriorityDistribution'
 import { VelocityChart } from '@/components/dashboard/VelocityChart'
 import { WoWSummaryStrip } from '@/components/dashboard/WoWSummaryStrip'
+import { PipedriveMetricsSection } from '@/components/dashboard/PipedriveMetricsSection'
+import { DashboardFilters } from '@/components/dashboard/DashboardFilters'
+import { DashboardTabSwitcher } from '@/components/dashboard/DashboardTabSwitcher'
+import { NegocioView } from '@/components/dashboard/NegocioView'
 import type { DashboardMetrics, AtRiskTicket, TicketPriority } from '@/lib/database.types'
 
 export const metadata: Metadata = { title: 'Dashboard' }
 
-export default async function DashboardPage() {
-  const profile  = await requireAdmin()
+// ─── Page ─────────────────────────────────────────────────────
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string; bank?: string; category?: string; tab?: string }>
+}) {
+  const profile = await requireAdmin()
+  const params  = await searchParams
+
+  // ── Negocio tab: skip all Supabase queries ────────────────
+  if (params.tab === 'negocio') {
+    return (
+      <div className="min-h-screen" style={{ backgroundColor: '#FAFAF8' }}>
+        <Navbar profile={profile} isAdmin />
+        <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+          <div className="mb-6">
+            <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
+            <p className="text-sm text-gray-400 mt-0.5">Métricas de negocio</p>
+          </div>
+          <DashboardTabSwitcher active="negocio" />
+          <Suspense>
+            <NegocioView />
+          </Suspense>
+        </main>
+      </div>
+    )
+  }
+
   const supabase = await createClient()
 
-  const now            = new Date()
-  const sevenDaysAgo   = new Date(now.getTime() - 7  * 24 * 60 * 60 * 1000)
+  // ── Date range ───────────────────────────────────────────────
+  const now       = new Date()
+
+  // Use local-time date strings to avoid UTC offset shifting Jan 1 → Dec 31
+  const localDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+  const yearStartStr = `${now.getFullYear()}-01-01`
+  const todayStr     = localDate(now)
+
+  const fromStr  = params.from ?? yearStartStr
+  const toStr    = params.to   ?? todayStr
+  const fromDate = new Date(fromStr)
+  const toDate   = new Date(toStr + 'T23:59:59')
+  const fromISO  = fromDate.toISOString()
+  const toISO    = toDate.toISOString()
+  const fromLabel = fromDate.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+  const toLabel   = toDate.toLocaleDateString('es-ES',   { day: '2-digit', month: 'short', year: 'numeric' })
+
+  const sevenDaysAgo    = new Date(now.getTime() - 7  * 24 * 60 * 60 * 1000)
   const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
   const fourHoursFromNow = new Date(now.getTime() + 4 * 60 * 60 * 1000)
 
@@ -41,7 +91,7 @@ export default async function DashboardPage() {
         .lt('sla_deadline', now.toISOString()),
     ])
 
-  // ── Avg resolution (all time) ─────────────────────────────────
+  // ── Avg resolution ────────────────────────────────────────────
   const { data: resolvedTickets } = await supabase
     .from('tickets')
     .select('created_at, resolved_at')
@@ -50,10 +100,8 @@ export default async function DashboardPage() {
 
   const avgResolutionDays = computeAvgResolution(resolvedTickets ?? [])
 
-  // ── New queries (all in parallel) ────────────────────────────
+  // ── Velocity, at-risk, prev-week (parallel) ───────────────────
   const [
-    openTicketsDetail,
-    categories,
     atRiskRaw,
     recentOpened,
     recentClosed,
@@ -61,16 +109,6 @@ export default async function DashboardPage() {
     prevWeekSlaResult,
     prevWeekResolvedTickets,
   ] = await Promise.all([
-    // Open ticket detail for priority/age/support-type distribution
-    supabase
-      .from('tickets')
-      .select('category_id, priority, created_at, subcategory')
-      .not('status', 'in', '(resolved,closed)'),
-
-    // Active categories for name lookup
-    supabase.from('categories').select('id, name').eq('is_active', true),
-
-    // At-risk: SLA deadline within 4h or already past
     supabase
       .from('tickets')
       .select('id, display_id, subject, category_id, sla_deadline')
@@ -80,110 +118,96 @@ export default async function DashboardPage() {
       .order('sla_deadline', { ascending: true })
       .limit(5),
 
-    // Velocity: opened last 7 days
-    supabase
-      .from('tickets')
-      .select('created_at')
+    supabase.from('tickets').select('created_at')
       .gte('created_at', sevenDaysAgo.toISOString()),
 
-    // Velocity: closed last 7 days
-    supabase
-      .from('tickets')
-      .select('resolved_at')
+    supabase.from('tickets').select('resolved_at')
       .in('status', ['resolved', 'closed'])
       .not('resolved_at', 'is', null)
       .gte('resolved_at', sevenDaysAgo.toISOString()),
 
-    // Prev-week open ticket count proxy (opened that week, now open)
-    supabase
-      .from('tickets')
-      .select('*', { count: 'exact', head: true })
+    supabase.from('tickets').select('*', { count: 'exact', head: true })
       .not('status', 'in', '(resolved,closed)')
       .gte('created_at', fourteenDaysAgo.toISOString())
       .lt('created_at', sevenDaysAgo.toISOString()),
 
-    // Prev-week SLA breaching snapshot
-    supabase
-      .from('tickets')
-      .select('*', { count: 'exact', head: true })
+    supabase.from('tickets').select('*', { count: 'exact', head: true })
       .not('status', 'in', '(resolved,closed)')
       .not('sla_deadline', 'is', null)
       .lt('sla_deadline', sevenDaysAgo.toISOString()),
 
-    // Prev-week resolved tickets for avg resolution
-    supabase
-      .from('tickets')
-      .select('created_at, resolved_at')
+    supabase.from('tickets').select('created_at, resolved_at')
       .in('status', ['resolved', 'closed'])
       .not('resolved_at', 'is', null)
       .gte('resolved_at', fourteenDaysAgo.toISOString())
       .lt('resolved_at', sevenDaysAgo.toISOString()),
   ])
 
-  // ── Derive: age distribution ──────────────────────────────────
-  const ageBuckets = { '1-3d': 0, '3-7d': 0, '7d+': 0 }
-  for (const t of openTicketsDetail.data ?? []) {
-    const ageDays = (now.getTime() - new Date(t.created_at).getTime()) / (1000 * 60 * 60 * 24)
-    if (ageDays < 3) ageBuckets['1-3d']++
-    else if (ageDays < 7) ageBuckets['3-7d']++
-    else ageBuckets['7d+']++
-  }
-  const ageDistribution: DashboardMetrics['ageDistribution'] = [
-    { bucket: '1-3d', count: ageBuckets['1-3d'] },
-    { bucket: '3-7d', count: ageBuckets['3-7d'] },
-    { bucket: '7d+',  count: ageBuckets['7d+']  },
-  ]
+  // ── Operations data (filtered by date range + optional bank/category) ──
+  let opsQuery = supabase
+    .from('tickets')
+    .select('category_id, bank_name, status, priority, created_at')
+    .gte('created_at', fromISO)
+    .lte('created_at', toISO)
 
-  // ── Derive: category workload (by form support type) ──────────
-  // The at-risk lookup still needs the DB category name
-  const categoryMap = Object.fromEntries(
-    (categories.data ?? []).map(c => [c.id, c.name]),
-  )
-  // Map subcategory values → the 7 top-level form support types
-  const SUBCATEGORY_TO_SUPPORT_TYPE: Record<string, string> = {
-    'NOC for Travel':       'Documents',
-    'NOC for Golden Visa':  'Documents',
-    'Employment Letter':    'Documents',
-    'Salary Certificate':   'Documents',
-    'Payslips':             'Documents',
-    'Other Document':       'Documents',
-    'Visa':                 'Visa Queries',
-    'Visa Queries':         'Visa Queries',
-    'Health Insurance':     'Health Insurance',
-    'Parking Application':  'Parking',
-    'Parking Update':       'Parking',
-    'Parking Cancellation': 'Parking',
-    'Time-Off':             'Time-Off',
-    'Revolut Adjustment':   'Revolut Adjustments',
-    'Other':                'Other',
-  }
-  const SUPPORT_TYPES = [
-    'Documents', 'Visa Queries', 'Health Insurance', 'Parking', 'Time-Off', 'Revolut Adjustments', 'Other',
-  ]
-  const supportTypeCounts: Record<string, number> = Object.fromEntries(
-    SUPPORT_TYPES.map(t => [t, 0]),
-  )
-  for (const t of openTicketsDetail.data ?? []) {
-    const label = SUBCATEGORY_TO_SUPPORT_TYPE[t.subcategory ?? ''] ?? 'Other'
-    supportTypeCounts[label]++
-  }
-  const ticketsByCategory = SUPPORT_TYPES
-    .map(name => ({ categoryId: name, name, count: supportTypeCounts[name] }))
-    .sort((a, b) => b.count - a.count)
+  if (params.bank)     opsQuery = opsQuery.eq('bank_name',   params.bank)
+  if (params.category) opsQuery = opsQuery.eq('category_id', params.category)
 
-  // ── Derive: priority distribution ────────────────────────────
+  const [opsResult, categoriesResult, allBanksResult] = await Promise.all([
+    opsQuery,
+    supabase.from('categories').select('id, name').eq('is_active', true).order('name'),
+    supabase.from('tickets').select('bank_name').not('bank_name', 'is', null),
+  ])
+
+  const opsTickets  = opsResult.data ?? []
+  const categories  = categoriesResult.data ?? []
+  const categoryMap = Object.fromEntries(categories.map(c => [c.id, c.name]))
+
+  // ── Derive: operations by category ──────────────────────────
+  const catOps: Record<string, { open: number; closed: number }> = {}
+  const bankOps: Record<string, { open: number; closed: number }> = {}
   const priorityCounts: Record<TicketPriority, number> = { low: 0, medium: 0, high: 0 }
-  for (const t of openTicketsDetail.data ?? []) {
-    const p = t.priority as TicketPriority
-    if (p in priorityCounts) priorityCounts[p]++
+  const ageBuckets = { '1-3d': 0, '3-7d': 0, '7d+': 0 }
+
+  for (const t of opsTickets) {
+    const catName  = categoryMap[t.category_id] ?? 'Otra'
+    const bankName = t.bank_name ?? 'Sin banco'
+    const isOpen   = !['resolved', 'closed'].includes(t.status)
+
+    if (!catOps[catName])  catOps[catName]  = { open: 0, closed: 0 }
+    if (!bankOps[bankName]) bankOps[bankName] = { open: 0, closed: 0 }
+
+    if (isOpen) {
+      catOps[catName].open++
+      bankOps[bankName].open++
+      const p = t.priority as TicketPriority
+      if (p in priorityCounts) priorityCounts[p]++
+      const ageDays = (now.getTime() - new Date(t.created_at).getTime()) / (1000 * 60 * 60 * 24)
+      if (ageDays < 3) ageBuckets['1-3d']++
+      else if (ageDays < 7) ageBuckets['3-7d']++
+      else ageBuckets['7d+']++
+    } else {
+      catOps[catName].closed++
+      bankOps[bankName].closed++
+    }
   }
+
+  const operationsByCategory = Object.entries(catOps).map(([name, v]) => ({ name, ...v }))
+  const operationsByBank     = Object.entries(bankOps).map(([name, v]) => ({ name, ...v }))
+
   const ticketsByPriority: DashboardMetrics['ticketsByPriority'] = [
     { priority: 'high',   count: priorityCounts.high   },
     { priority: 'medium', count: priorityCounts.medium },
     { priority: 'low',    count: priorityCounts.low    },
   ]
 
-  // ── Derive: at-risk tickets ───────────────────────────────────
+  const ageDistribution: DashboardMetrics['ageDistribution'] = [
+    { bucket: '1-3d', count: ageBuckets['1-3d'] },
+    { bucket: '3-7d', count: ageBuckets['3-7d'] },
+    { bucket: '7d+',  count: ageBuckets['7d+']  },
+  ]
+
+  // ── At-risk ───────────────────────────────────────────────────
   const atRiskTickets: AtRiskTicket[] = (atRiskRaw.data ?? []).slice(0, 3).map(t => ({
     id:        t.id,
     displayId: t.display_id,
@@ -193,13 +217,13 @@ export default async function DashboardPage() {
     status:    new Date(t.sla_deadline!) < now ? 'breaching' : 'at-risk',
   }))
 
-  // ── Derive: velocity last 7 days ─────────────────────────────
-  const last7Days = Array.from({ length: 7 }, (_, i) => {
+  // ── Velocity ──────────────────────────────────────────────────
+  const last7Days    = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(now.getTime() - (6 - i) * 24 * 60 * 60 * 1000)
     return d.toISOString().slice(0, 10)
   })
-  const openedByDay = Object.fromEntries(last7Days.map(d => [d, 0]))
-  const closedByDay = Object.fromEntries(last7Days.map(d => [d, 0]))
+  const openedByDay  = Object.fromEntries(last7Days.map(d => [d, 0]))
+  const closedByDay  = Object.fromEntries(last7Days.map(d => [d, 0]))
   for (const t of recentOpened.data ?? []) {
     const day = t.created_at.slice(0, 10)
     if (day in openedByDay) openedByDay[day]++
@@ -219,10 +243,7 @@ export default async function DashboardPage() {
   const prevWeekSlaBreaching  = prevWeekSlaResult.count   ?? 0
   const prevWeekAvgResolution = computeAvgResolution(prevWeekResolvedTickets.data ?? [])
 
-  // ── Aging: existing field for backward compat ─────────────────
-  const agingCount = ageBuckets['7d+']
-
-  // ── Assemble metrics ──────────────────────────────────────────
+  // ── Assemble core metrics ─────────────────────────────────────
   const metrics: DashboardMetrics = {
     totalTickets:        total.count      ?? 0,
     openTickets:         open.count       ?? 0,
@@ -232,9 +253,9 @@ export default async function DashboardPage() {
     resolvedCount:       resolved.count   ?? 0,
     closedCount:         closed.count     ?? 0,
     slaBreaching:        slaBreaching.count ?? 0,
-    agingTickets:        agingCount,
+    agingTickets:        ageBuckets['7d+'],
     avgResolutionDays:   Math.round(avgResolutionDays * 10) / 10,
-    ticketsByCategory,
+    ticketsByCategory:   operationsByCategory.map(r => ({ categoryId: r.name, name: r.name, count: r.open })),
     ticketsByPriority,
     ageDistribution,
     atRiskTickets,
@@ -244,22 +265,40 @@ export default async function DashboardPage() {
     prevWeekAvgResolution: Math.round(prevWeekAvgResolution * 10) / 10,
   }
 
+  // ── Filter options (from all tickets, not filtered set) ──────
+  const uniqueBanks = Array.from(
+    new Set((allBanksResult.data ?? []).map(t => t.bank_name).filter(Boolean) as string[]),
+  ).sort()
+
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen" style={{ backgroundColor: '#FAFAF8' }}>
       <Navbar profile={profile} isAdmin />
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
 
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Operations overview</p>
+          <p className="text-sm text-gray-400 mt-0.5">Resumen operativo</p>
         </div>
+
+        {/* ── Tab switcher ────────────────────────────────────── */}
+        <DashboardTabSwitcher active="operaciones" />
+
+        {/* ── Filters ─────────────────────────────────────────── */}
+        <Suspense>
+          <DashboardFilters
+            banks={uniqueBanks}
+            categories={categories}
+            defaultFrom={fromStr}
+            defaultTo={toStr}
+          />
+        </Suspense>
 
         {/* ── Zone 1: Command Strip ───────────────────────────── */}
         <div className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-6">
           <div className="px-6 pt-4 pb-0 border-b border-gray-50">
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 pb-3">
-              Today at a Glance
+              Resumen del Día
             </p>
           </div>
           <CommandStrip metrics={metrics} />
@@ -271,10 +310,9 @@ export default async function DashboardPage() {
           {/* Zone 2 — Health & Risk (40%) */}
           <div className="md:col-span-2 space-y-6">
 
-            {/* 2a + 2b: SLA Ring + Aging */}
             <div className="bg-white border border-gray-100 rounded-xl p-5">
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">
-                Health & Risk
+                Salud & Riesgo
               </p>
               <div className="flex items-start gap-6">
                 <SLAHealthRing
@@ -283,7 +321,7 @@ export default async function DashboardPage() {
                 />
                 <div className="flex-1 pt-1">
                   <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-                    Ticket Age
+                    Antigüedad
                   </p>
                   <AgingDistribution
                     ageDistribution={metrics.ageDistribution}
@@ -293,10 +331,9 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            {/* 2c: At-Risk Tickets */}
             <div className="bg-white border border-gray-100 rounded-xl p-5">
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-                At-Risk Tickets
+                Solicitudes en Riesgo
               </p>
               <AtRiskTicketList tickets={metrics.atRiskTickets} />
             </div>
@@ -305,26 +342,27 @@ export default async function DashboardPage() {
           {/* Zone 3 — Operational Load (60%) */}
           <div className="md:col-span-3 space-y-6">
 
-            {/* 3a: Status Pipeline */}
             <div className="bg-white border border-gray-100 rounded-xl p-5">
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">
-                Status Pipeline
+                Pipeline de Estado
               </p>
               <StatusPipeline metrics={metrics} />
             </div>
 
-            {/* 3b: Category Workload */}
             <div className="bg-white border border-gray-100 rounded-xl p-5">
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">
-                Category Workload
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
+                Operaciones por Categoría
               </p>
-              <CategoryWorkload ticketsByCategory={metrics.ticketsByCategory} />
+              <p className="text-xs text-gray-400 mb-4">{fromLabel} – {toLabel}</p>
+              <OperationsBreakdown
+                rows={operationsByCategory}
+                emptyMsg="Sin solicitudes en el periodo seleccionado"
+              />
             </div>
 
-            {/* 3c: Priority Distribution */}
             <div className="bg-white border border-gray-100 rounded-xl p-5">
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">
-                Priority Distribution
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
+                Distribución por Prioridad
               </p>
               <PriorityDistribution
                 ticketsByPriority={metrics.ticketsByPriority}
@@ -334,10 +372,22 @@ export default async function DashboardPage() {
           </div>
         </div>
 
+        {/* ── Operations by Bank ───────────────────────────────── */}
+        <div className="bg-white border border-gray-100 rounded-xl p-5 mb-6">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
+            Operaciones por Banco
+          </p>
+          <p className="text-xs text-gray-400 mb-4">{fromLabel} – {toLabel}</p>
+          <OperationsBreakdown
+            rows={operationsByBank}
+            emptyMsg="Sin solicitudes en el periodo seleccionado"
+          />
+        </div>
+
         {/* ── Zone 4: Performance Trends ──────────────────────── */}
         <div className="bg-white border border-gray-100 rounded-xl p-5">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">
-            Performance Trends
+            Tendencias de Rendimiento
           </p>
           <VelocityChart velocityLast7Days={metrics.velocityLast7Days} />
           <div className="mt-4 pt-4 border-t border-gray-50">

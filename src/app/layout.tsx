@@ -3,17 +3,17 @@ import './globals.css'
 import { Toaster } from 'sonner'
 
 export const metadata: Metadata = {
-  title: { default: 'People Hub', template: '%s | People Hub' },
-  description: 'Internal Help Desk',
+  title: { default: 'Request Hub · Bancos', template: '%s | Request Hub Bancos' },
+  description: 'Plataforma de gestión de solicitudes bancarias',
   icons: {
-    icon: '/favicon.png',
-    apple: '/favicon.png',
+    icon: '/logo-bayteca.svg',
+    apple: '/logo-bayteca.svg',
   },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="es" suppressHydrationWarning>
       <body>
         {children}
         <Toaster position="top-right" richColors closeButton />

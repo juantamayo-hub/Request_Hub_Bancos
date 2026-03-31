@@ -65,11 +65,11 @@ export async function postSlackDM(email: string, message: SlackMessage): Promise
 // ─── Message builders ─────────────────────────────────────────
 
 const STATUS_LABELS: Record<string, string> = {
-  new:                 'New',
-  in_progress:         'In Progress',
-  waiting_on_employee: 'Waiting on You',
-  resolved:            'Resolved',
-  closed:              'Closed',
+  new:                 'Nuevo',
+  in_progress:         'En Proceso',
+  waiting_on_employee: 'Esperando',
+  resolved:            'Cancelado',
+  closed:              'Cerrado',
 }
 
 /**
@@ -281,6 +281,37 @@ export function buildStatusChangedRequesterMessage(p: {
         accessory: {
           type: 'button',
           text: { type: 'plain_text', text: 'View Ticket' },
+          url,
+        },
+      },
+    ],
+  }
+}
+
+/**
+ * DM sent to the requester when their ticket is cancelled.
+ * Includes the cancellation reason provided by the admin.
+ */
+export function buildTicketCancelledMessage(p: {
+  displayId:    string
+  subject:      string
+  cancelReason: string
+  ticketId:     string
+  appUrl:       string
+}): SlackMessage {
+  const url = `${p.appUrl}/tickets/${p.ticketId}`
+  return {
+    text: `Tu solicitud ${p.displayId} ha sido cancelada`,
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `:x: *Tu solicitud ha sido cancelada*\n*${p.displayId}* — ${p.subject}\n\n*Motivo:* ${p.cancelReason}`,
+        },
+        accessory: {
+          type:  'button',
+          text:  { type: 'plain_text', text: 'Ver Solicitud' },
           url,
         },
       },

@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Navbar } from '@/components/layout/Navbar'
 import { TicketForm } from '@/components/tickets/TicketForm'
 
-export const metadata: Metadata = { title: 'New Ticket' }
+export const metadata: Metadata = { title: 'Nueva Solicitud' }
 
 export default async function NewTicketPage() {
   const profile  = await requireProfile()
@@ -17,13 +17,13 @@ export default async function NewTicketPage() {
     .order('name')
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen" style={{ backgroundColor: '#FAFAF8' }}>
       <Navbar profile={profile} isAdmin={profile.role === 'admin'} />
       <main className="page-container">
         <div className="max-w-2xl">
           <div className="mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">New Ticket</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Describe your issue and we'll route it to the right team.</p>
+            <h1 className="text-2xl font-bold text-gray-900">Nueva Solicitud</h1>
+            <p className="text-sm text-gray-500 mt-0.5">Rellena el formulario y asignaremos la solicitud al equipo bancario.</p>
           </div>
           <TicketForm categories={categories ?? []} />
         </div>

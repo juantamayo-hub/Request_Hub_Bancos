@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const ALLOWED_DOMAIN = process.env.NEXT_PUBLIC_ALLOWED_DOMAIN ?? 'huspy.io'
+const ALLOWED_DOMAINS = ['huspy.io', 'bayteca.com']
 
 // Paths that don't require authentication
 const PUBLIC_PATHS = ['/login', '/auth/callback', '/unauthorized', '/api/slack/']
@@ -42,7 +42,7 @@ export async function middleware(request: NextRequest) {
   if (user) {
     // ─── Domain enforcement (server-side, belt-and-suspenders) ───
     const email = user.email ?? ''
-    if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) {
+    if (!ALLOWED_DOMAINS.some(domain => email.endsWith(`@${domain}`))) {
       await supabase.auth.signOut()
       const url = request.nextUrl.clone()
       url.pathname = '/login'

@@ -16,7 +16,8 @@
   * { box-sizing: border-box; }
 
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    background-color: #FAFAF8;
+    @apply text-gray-900 antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
 }

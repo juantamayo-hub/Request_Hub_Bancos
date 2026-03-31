@@ -198,8 +198,10 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->>'family_name', ''),
     COALESCE(NEW.raw_user_meta_data->>'avatar_url', '')
   )
-  ON CONFLICT (id) DO NOTHING;
+  ON CONFLICT DO NOTHING;   -- handles both id and email unique violations
   RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RETURN NEW;               -- never fail auth even if profile creation fails
 END;
 $$;
 

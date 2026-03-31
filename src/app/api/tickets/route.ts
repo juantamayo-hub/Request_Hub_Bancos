@@ -2,13 +2,13 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notifyTicketCreated } from '@/lib/notifications'
+import { createDealNote } from '@/lib/pipedrive'
 import type { CreateTicketInput } from '@/lib/database.types'
 
 /**
  * POST /api/tickets
- * Creates a new ticket. Authenticated employees only.
- * Uses assign_ticket_owner() RPC for round-robin assignment by support_type.
- * Falls back to routing_rules for SLA configuration.
+ * Creates a new banking ticket. Authenticated users only.
+ * Assigns owner from routing_rules by category.
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   // Verify session
   const { data: { user }, error: authErr } = await supabase.auth.getUser()
   if (authErr || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
   // Get profile (for created_by FK)
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (!profile) {
-    return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+    return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 })
   }
 
   // Parse + validate body
@@ -35,14 +35,22 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json()
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 })
   }
 
-  const { category_id, subject, description, subcategory, support_type, priority, tags } = body
+  const { category_id, subject, description, subcategory, priority, tags, bank_name, bank_email, pipedrive_deal_id } = body
+
 
   if (!category_id || !subject?.trim() || !description?.trim()) {
     return NextResponse.json(
-      { error: 'category_id, subject, and description are required' },
+      { error: 'category_id, subject y description son obligatorios' },
+      { status: 400 },
+    )
+  }
+
+  if (!bank_name?.trim()) {
+    return NextResponse.json(
+      { error: 'bank_name es obligatorio' },
       { status: 400 },
     )
   }
@@ -53,37 +61,17 @@ export async function POST(request: NextRequest) {
     admin = createAdminClient()
   } catch (err) {
     console.error('Admin client init failed:', err)
-    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+    return NextResponse.json({ error: 'Error de configuración del servidor' }, { status: 500 })
   }
 
-  // ─── Round-robin owner assignment ────────────────────────────
-  // If support_type is provided, use the atomic assign_ticket_owner() RPC.
-  // Otherwise fall back to routing_rules (legacy / admin-reclassified tickets).
-  let assigneeEmail: string | null = null
+  // ─── Owner assignment from routing_rules ─────────────────────
+  const { data: rule } = await admin
+    .from('routing_rules')
+    .select('*, categories(id, name)')
+    .eq('category_id', category_id)
+    .single()
 
-  if (support_type) {
-    const { data: ownerEmail, error: rpcErr } = await admin
-      .rpc('assign_ticket_owner', { p_support_type: support_type })
-
-    if (rpcErr) {
-      console.error('assign_ticket_owner RPC error:', rpcErr)
-    } else {
-      assigneeEmail = ownerEmail as string | null
-    }
-  } else {
-    // Fallback: look up routing_rules by category
-    const { data: rule } = await admin
-      .from('routing_rules')
-      .select('owner_email')
-      .eq('category_id', category_id)
-      .single()
-    assigneeEmail = rule?.owner_email ?? null
-  }
-
-  // ─── Fallback to Maryam if no assignee was resolved ──────────
-  if (!assigneeEmail) {
-    assigneeEmail = 'maryam.mesforoush@huspy.io'
-  }
+  const assigneeEmail = rule?.owner_email ?? null
 
   // ─── Resolve assignee email → profile id ──────────────────────
   let assigneeId: string | null = null
@@ -96,18 +84,11 @@ export async function POST(request: NextRequest) {
     assigneeId = assignee?.id ?? null
   }
 
-  // ─── SLA from routing_rules ───────────────────────────────────
-  const { data: rule } = await admin
-    .from('routing_rules')
-    .select('*, categories(id, name)')
-    .eq('category_id', category_id)
-    .single()
-
-  const slaHours      = rule?.sla_hours ?? 72
+  const slaHours       = rule?.sla_hours ?? 72
   const defaultPriority = priority ?? rule?.default_priority ?? 'medium'
-  const slaDeadline   = new Date(Date.now() + slaHours * 60 * 60 * 1000).toISOString()
+  const slaDeadline    = new Date(Date.now() + slaHours * 60 * 60 * 1000).toISOString()
 
-  // ─── Create ticket (use regular client so RLS created_by check fires) ─
+  // ─── Create ticket ────────────────────────────────────────────
   const { data: ticket, error: insertErr } = await supabase
     .from('tickets')
     .insert({
@@ -115,7 +96,6 @@ export async function POST(request: NextRequest) {
       assignee_id:  assigneeId,
       category_id,
       subcategory:  subcategory ?? null,
-      support_type: support_type ?? null,
       subject:      subject.trim(),
       description:  description.trim(),
       priority:     defaultPriority,
@@ -123,13 +103,16 @@ export async function POST(request: NextRequest) {
       sla_hours:    slaHours,
       sla_deadline: slaDeadline,
       tags:         tags ?? null,
+      bank_name:         bank_name.trim(),
+      bank_email:        bank_email?.trim() ?? null,
+      pipedrive_deal_id: pipedrive_deal_id ?? null,
     })
     .select('id, display_id, subject, status, priority')
     .single()
 
   if (insertErr || !ticket) {
     console.error('Ticket insert error:', insertErr)
-    return NextResponse.json({ error: 'Failed to create ticket' }, { status: 500 })
+    return NextResponse.json({ error: 'Error al crear la solicitud' }, { status: 500 })
   }
 
   // ─── Audit log ────────────────────────────────────────────────
@@ -159,6 +142,25 @@ export async function POST(request: NextRequest) {
     requesterEmail: profile.email,
     assigneeEmail:  assigneeEmail ?? undefined,
   }).catch(console.error)
+
+  // ─── Pipedrive note (fire-and-forget) ────────────────────────
+  if (pipedrive_deal_id) {
+    const ticketUrl    = `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/tickets/${ticket.id}`
+    const assigneeLine = assigneeEmail ? `\nAsignado a: ${assigneeEmail}` : ''
+    const noteContent  = [
+      `📋 <b>Ticket ${ticket.display_id} creado en Request Hub Bancos</b>`,
+      ``,
+      `<b>Categoría:</b> ${categoryName}`,
+      `<b>Banco:</b> ${bank_name}`,
+      `<b>Descripción:</b> ${description.trim()}${assigneeLine}`,
+      ``,
+      `<a href="${ticketUrl}">Ver ticket → ${ticket.display_id}</a>`,
+    ].join('\n')
+
+    createDealNote(pipedrive_deal_id, noteContent).catch(err =>
+      console.error('Pipedrive note error:', err),
+    )
+  }
 
   return NextResponse.json({ ticket }, { status: 201 })
 }

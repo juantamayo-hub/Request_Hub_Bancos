@@ -29,47 +29,60 @@ export function Navbar({ profile, isAdmin = false }: Props) {
         <div className="flex items-center gap-6">
           <Link
             href="/tickets"
-            className="flex items-center gap-2.5 text-gray-900 no-underline hover:opacity-90 transition-opacity"
+            className="flex items-center gap-2.5 no-underline hover:opacity-90 transition-opacity"
           >
-            <Image
-              src="/logo-huspy.png"
-              alt="Huspy"
-              width={192}
-              height={56}
-              className="h-7 w-auto object-contain"
-              quality={100}
-              priority
-            />
-            <span className="text-sm font-medium text-gray-500 hidden sm:inline">People Hub</span>
+            {/* Co-brand lockup: Bayteca + MD */}
+            <div className="flex items-center gap-2">
+              <Image
+                src="/logo-bayteca.svg"
+                alt="Bayteca"
+                width={96}
+                height={28}
+                className="h-6 w-auto object-contain"
+                quality={100}
+                priority
+              />
+              <span className="text-gray-300 font-light text-lg leading-none">·</span>
+              <Image
+                src="/logo-md-black.svg"
+                alt="Mortgage Direct"
+                width={96}
+                height={28}
+                className="h-6 w-auto object-contain"
+                quality={100}
+                priority
+              />
+            </div>
+            <span className="text-sm font-medium text-gray-500 hidden sm:inline">Request Hub</span>
           </Link>
 
           <nav className="flex items-center gap-1 text-sm">
             <Link
               href="/tickets"
-              className="px-3 py-1.5 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+              className="px-3 py-1.5 rounded-md text-gray-600 hover:bg-[#E8F2EC] hover:text-[#083D20] transition-colors"
             >
-              My Tickets
+              Mis Solicitudes
             </Link>
 
             {isAdmin && (
               <>
                 <Link
                   href="/admin/tickets"
-                  className="px-3 py-1.5 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                  className="px-3 py-1.5 rounded-md text-gray-600 hover:bg-[#E8F2EC] hover:text-[#083D20] transition-colors"
                 >
-                  All Tickets
+                  Todos los Tickets
                 </Link>
                 <Link
                   href="/dashboard"
-                  className="px-3 py-1.5 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                  className="px-3 py-1.5 rounded-md text-gray-600 hover:bg-[#E8F2EC] hover:text-[#083D20] transition-colors"
                 >
                   Dashboard
                 </Link>
                 <Link
                   href="/admin/users"
-                  className="px-3 py-1.5 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                  className="px-3 py-1.5 rounded-md text-gray-600 hover:bg-[#E8F2EC] hover:text-[#083D20] transition-colors"
                 >
-                  Users
+                  Usuarios
                 </Link>
               </>
             )}
@@ -79,7 +92,7 @@ export function Navbar({ profile, isAdmin = false }: Props) {
         {/* User menu */}
         <div className="flex items-center gap-3">
           {isAdmin && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-900 text-white font-medium">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-[#1F3657] text-white font-medium">
               Admin
             </span>
           )}
@@ -94,7 +107,7 @@ export function Navbar({ profile, isAdmin = false }: Props) {
                 className="rounded-full"
               />
             ) : (
-              <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-xs font-medium text-gray-600">
+              <div className="w-7 h-7 rounded-full bg-[#E8F2EC] flex items-center justify-center text-xs font-medium text-[#083D20]">
                 {(profile.first_name?.[0] ?? profile.email[0]).toUpperCase()}
               </div>
             )}
@@ -107,7 +120,7 @@ export function Navbar({ profile, isAdmin = false }: Props) {
             onClick={handleSignOut}
             className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
           >
-            Sign out
+            Salir
           </button>
         </div>
       </div>

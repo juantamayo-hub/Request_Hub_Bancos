@@ -16,6 +16,18 @@ const config: Config = {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
+      colors: {
+        'brand-green': {
+          DEFAULT: '#083D20',
+          hover:   '#0a4d28',
+          light:   '#E8F2EC',
+        },
+        'brand-navy': {
+          DEFAULT: '#1F3657',
+          hover:   '#253f67',
+          light:   '#EEF3FA',
+        },
+      },
     },
   },
   plugins: [],

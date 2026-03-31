@@ -5,6 +5,7 @@ import {
   buildNewCommentMessage,
   buildStatusChangedRequesterMessage,
   buildTicketClosedFeedbackMessage,
+  buildTicketCancelledMessage,
   buildAdminPromotedMessage,
 } from './slack'
 import {
@@ -134,6 +135,29 @@ export async function notifyAssigned(p: {
       requesterEmail: p.requesterEmail,
       ticketId:       p.ticketId,
       appUrl:         APP_URL,
+    }),
+  )
+}
+
+/**
+ * Fires when a ticket is cancelled by an admin.
+ * Sends a Slack DM to the requester with the cancellation reason.
+ */
+export async function notifyTicketCancelled(p: {
+  ticketId:       string
+  displayId:      string
+  subject:        string
+  cancelReason:   string
+  requesterEmail: string
+}) {
+  await postSlackDM(
+    p.requesterEmail,
+    buildTicketCancelledMessage({
+      displayId:    p.displayId,
+      subject:      p.subject,
+      cancelReason: p.cancelReason,
+      ticketId:     p.ticketId,
+      appUrl:       APP_URL,
     }),
   )
 }

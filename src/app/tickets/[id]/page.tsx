@@ -73,7 +73,7 @@ export default async function TicketDetailPage({ params }: Props) {
   const t = ticket as TicketWithRelations
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen" style={{ backgroundColor: '#FAFAF8' }}>
       <Navbar profile={profile} isAdmin={profile.role === 'admin'} />
       <main className="page-container">
         <div className="max-w-3xl">
@@ -81,7 +81,7 @@ export default async function TicketDetailPage({ params }: Props) {
           {/* Header */}
           <div className="mb-6">
             <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-              <a href="/tickets" className="hover:text-gray-700">My Tickets</a>
+              <a href="/tickets" className="hover:text-gray-700">Mis Solicitudes</a>
               <span>/</span>
               <span className="font-mono text-gray-700">{t.display_id}</span>
             </div>
@@ -92,7 +92,7 @@ export default async function TicketDetailPage({ params }: Props) {
               <span className="text-sm text-gray-500">{t.categories.name}</span>
               {isSlaBreaching(t.sla_deadline) && (
                 <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">
-                  SLA Breached
+                  SLA Vencido
                 </span>
               )}
             </div>
@@ -102,22 +102,34 @@ export default async function TicketDetailPage({ params }: Props) {
           <div className="card p-6 mb-6">
             <div className="grid grid-cols-2 gap-4 text-sm mb-5">
               <div>
-                <p className="text-gray-500 mb-0.5">Opened</p>
+                <p className="text-gray-500 mb-0.5">Creado</p>
                 <p className="font-medium">{formatDate(t.created_at)}</p>
               </div>
               <div>
-                <p className="text-gray-500 mb-0.5">Last updated</p>
+                <p className="text-gray-500 mb-0.5">Última actualización</p>
                 <p className="font-medium">{formatDate(t.updated_at)}</p>
               </div>
+              {(t as typeof t & { bank_name?: string | null }).bank_name && (
+                <div>
+                  <p className="text-gray-500 mb-0.5">Banco</p>
+                  <p className="font-medium">{(t as typeof t & { bank_name?: string | null }).bank_name}</p>
+                </div>
+              )}
+              {(t as typeof t & { bank_email?: string | null }).bank_email && (
+                <div>
+                  <p className="text-gray-500 mb-0.5">Email bancario</p>
+                  <p className="font-medium">{(t as typeof t & { bank_email?: string | null }).bank_email}</p>
+                </div>
+              )}
               {t.assignee && (
                 <div>
-                  <p className="text-gray-500 mb-0.5">Assigned to</p>
+                  <p className="text-gray-500 mb-0.5">Asignado a</p>
                   <p className="font-medium">{displayName(t.assignee)}</p>
                 </div>
               )}
               {t.sla_deadline && (
                 <div>
-                  <p className="text-gray-500 mb-0.5">SLA deadline</p>
+                  <p className="text-gray-500 mb-0.5">Fecha límite SLA</p>
                   <p className={`font-medium ${isSlaBreaching(t.sla_deadline) ? 'text-red-600' : ''}`}>
                     {formatDate(t.sla_deadline)}
                   </p>
@@ -134,7 +146,7 @@ export default async function TicketDetailPage({ params }: Props) {
 
           {/* Comments */}
           <div className="card p-6">
-            <h2 className="font-semibold text-gray-900 mb-4">Activity</h2>
+            <h2 className="font-semibold text-gray-900 mb-4">Actividad</h2>
             <CommentThread
               comments={comments}
               currentProfileId={profile.id}

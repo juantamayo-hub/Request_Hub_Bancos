@@ -7,7 +7,7 @@ import { AdminFilters } from '@/components/admin/AdminFilters'
 import { TicketList } from '@/components/tickets/TicketList'
 import type { TicketWithRelations, TicketStatus, TicketPriority } from '@/lib/database.types'
 
-export const metadata: Metadata = { title: 'Admin — All Tickets' }
+export const metadata: Metadata = { title: 'Admin — Todas las Solicitudes' }
 
 interface Props {
   searchParams: Promise<{
@@ -43,14 +43,14 @@ export default async function AdminTicketsPage({ searchParams }: Props) {
   const { data: tickets } = await query.order('created_at', { ascending: false })
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen" style={{ backgroundColor: '#FAFAF8' }}>
       <Navbar profile={profile} isAdmin />
       <main className="page-container">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">All Tickets</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Todas las Solicitudes</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              {tickets?.length ?? 0} ticket{tickets?.length !== 1 ? 's' : ''}
+              {tickets?.length ?? 0} solicitud{tickets?.length !== 1 ? 'es' : ''}
             </p>
           </div>
           <Link href="/dashboard" className="text-sm text-gray-600 hover:text-gray-900 underline-offset-2 hover:underline">

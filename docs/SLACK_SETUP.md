@@ -43,7 +43,7 @@ People Hub uses Slack Web API to send real-time notifications to channel **C0AG3
 3. Review permissions and click **"Allow"**
 4. **Copy the Bot User OAuth Token**
    - Starts with `xoxb-`
-   - Looks like: `xoxb-XXXX-XXXX-XXXX`
+   - Looks like: `xoxb-XXXX-XXXX-XXXX` (never share or commit this)
    - ⚠️ **Keep this secure! Never commit to code.**
 
 ---

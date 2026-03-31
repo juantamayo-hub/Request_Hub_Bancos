@@ -19,14 +19,22 @@ export async function requireUser() {
 /** Returns the profiles row for the current user, or null. */
 export async function getProfile(): Promise<Profile | null> {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
 
-  const { data } = await supabase
+  if (userError || !user) {
+    console.warn('[getProfile] No auth user:', userError?.message)
+    return null
+  }
+
+  const { data, error: profileError } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', user.id)
     .single()
+
+  if (profileError) {
+    console.warn('[getProfile] Profile query error:', profileError.message, 'uid:', user.id)
+  }
 
   return data ?? null
 }

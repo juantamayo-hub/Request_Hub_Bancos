@@ -1,5 +1,5 @@
 // ============================================================
-// People Hub — Database Types
+// Request Hub Bancos — Database Types
 // Manually maintained to mirror supabase/migrations/001_initial_schema.sql
 // Run `npx supabase gen types typescript` to regenerate from a live project.
 // ============================================================
@@ -11,7 +11,6 @@ export type TicketPriority  = 'low' | 'medium' | 'high'
 export type UserRole        = 'employee' | 'admin'
 export type CommentVisibility = 'public' | 'internal'
 export type AuditAction     = 'created' | 'status_changed' | 'assigned' | 'priority_changed' | 'comment_added' | 'updated'
-export type SupportType     = 'documents' | 'visa' | 'health_insurance' | 'parking' | 'time_off' | 'revolut' | 'other'
 
 // ─── Table row types ──────────────────────────────────────────
 
@@ -26,14 +25,6 @@ export interface Profile {
   is_available: boolean
   created_at:   string
   updated_at:   string
-}
-
-export interface SupportTypeOwner {
-  id:           string
-  support_type: SupportType
-  owner_email:  string
-  sort_order:   number
-  created_at:   string
 }
 
 export interface Category {
@@ -62,7 +53,6 @@ export interface Ticket {
   assignee_id:  string | null
   category_id:  string
   subcategory:  string | null
-  support_type: SupportType | null
   subject:      string
   description:  string
   priority:     TicketPriority
@@ -70,7 +60,10 @@ export interface Ticket {
   sla_hours:    number | null
   sla_deadline: string | null
   tags:         string[] | null
-  created_at:   string
+  bank_name:         string | null
+  bank_email:        string | null
+  pipedrive_deal_id: number | null
+  created_at:        string
   updated_at:   string
   resolved_at:  string | null
 }
@@ -190,17 +183,20 @@ export interface DashboardMetrics {
 export interface CreateTicketInput {
   category_id:   string
   subcategory?:  string
-  support_type?: SupportType
   subject:       string
   description:   string
   priority?:     TicketPriority
   tags?:         string[]
+  bank_name?:         string
+  bank_email?:        string
+  pipedrive_deal_id?: number
 }
 
 export interface UpdateTicketInput {
-  status?:      TicketStatus
-  priority?:    TicketPriority
-  assignee_id?: string | null
+  status?:        TicketStatus
+  priority?:      TicketPriority
+  assignee_id?:   string | null
+  cancel_reason?: string
 }
 
 export interface AddCommentInput {
