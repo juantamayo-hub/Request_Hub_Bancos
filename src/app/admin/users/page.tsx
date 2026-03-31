@@ -16,7 +16,7 @@ export type CategoryWithRule = {
     backup_owner_email: string | null
     sla_hours:          number
     default_priority:   string
-  } | null
+  }[]
 }
 
 export default async function UsersPage() {
