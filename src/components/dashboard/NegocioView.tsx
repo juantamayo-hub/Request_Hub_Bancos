@@ -69,62 +69,78 @@ function BaytecaRevenueCard({ revenue, dateRange }: { revenue: BaytecaRevenue; d
   )
 }
 
-// ── Skeletons ─────────────────────────────────────────────────
+// ── Pipedrive Loader ──────────────────────────────────────────
 
-function RevenueSkeleton() {
+const LOADING_STEPS = [
+  'Conectando con Pipedrive...',
+  'Extrayendo deals del pipeline...',
+  'Calculando métricas de conversión...',
+  'Procesando datos de revenue...',
+  'Casi listo...',
+]
+
+function PipedriveLoader() {
+  const [stepIdx, setStepIdx] = useState(0)
+  const [dots,    setDots]    = useState('')
+
+  useEffect(() => {
+    const stepTimer = setInterval(() => {
+      setStepIdx(i => (i + 1) % LOADING_STEPS.length)
+    }, 3000)
+    const dotsTimer = setInterval(() => {
+      setDots(d => d.length >= 3 ? '' : d + '.')
+    }, 500)
+    return () => { clearInterval(stepTimer); clearInterval(dotsTimer) }
+  }, [])
+
   return (
-    <div className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-6 animate-pulse">
-      <div className="px-6 pt-4 pb-3 border-b border-gray-50">
-        <div className="h-2.5 w-48 bg-gray-100 rounded" />
+    <div className="bg-white border border-gray-100 rounded-xl p-12 mb-6 flex flex-col items-center justify-center gap-6">
+
+      {/* Animated ring */}
+      <div className="relative w-16 h-16">
+        <svg className="animate-spin w-16 h-16" viewBox="0 0 64 64" fill="none">
+          <circle cx="32" cy="32" r="28" stroke="#E8F2EC" strokeWidth="6" />
+          <path
+            d="M32 4 a28 28 0 0 1 28 28"
+            stroke="#083D20"
+            strokeWidth="6"
+            strokeLinecap="round"
+          />
+        </svg>
+        {/* Center icon */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <svg className="w-6 h-6 text-[#083D20]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+          </svg>
+        </div>
       </div>
-      <div className="grid grid-cols-3 divide-x divide-gray-100">
-        {[0, 1, 2].map(i => (
-          <div key={i} className="px-5 py-4 space-y-2">
-            <div className="h-2 w-24 bg-gray-100 rounded" />
-            <div className="h-8 w-32 bg-gray-100 rounded" />
-            <div className="h-2 w-20 bg-gray-100 rounded" />
-          </div>
+
+      {/* Step message */}
+      <div className="text-center">
+        <p className="text-sm font-medium text-gray-700 h-5 transition-all duration-300">
+          {LOADING_STEPS[stepIdx].replace('...', '')}{dots}
+        </p>
+        <p className="text-xs text-gray-400 mt-1">
+          Pipedrive procesa hasta miles de deals — esto puede tardar 10–20 segundos
+        </p>
+      </div>
+
+      {/* Animated progress dots */}
+      <div className="flex gap-1.5">
+        {LOADING_STEPS.map((_, i) => (
+          <div
+            key={i}
+            className={`h-1.5 rounded-full transition-all duration-500 ${
+              i === stepIdx
+                ? 'w-6 bg-[#083D20]'
+                : i < stepIdx
+                ? 'w-1.5 bg-[#083D20]/30'
+                : 'w-1.5 bg-gray-200'
+            }`}
+          />
         ))}
       </div>
-    </div>
-  )
-}
 
-function KPISkeleton() {
-  return (
-    <div className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-6 animate-pulse">
-      <div className="px-6 pt-4 pb-3 border-b border-gray-50">
-        <div className="h-2.5 w-64 bg-gray-100 rounded" />
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-gray-100">
-        {[0, 1, 2, 3].map(i => (
-          <div key={i} className="px-5 py-4 space-y-3">
-            <div className="h-2 w-36 bg-gray-100 rounded" />
-            <div className="h-8 w-16 bg-gray-100 rounded" />
-            <div className="h-1.5 w-full bg-gray-100 rounded-full" />
-            <div className="h-2 w-24 bg-gray-100 rounded" />
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function WaterfallSkeleton() {
-  return (
-    <div className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-6 animate-pulse">
-      <div className="px-6 pt-4 pb-3 border-b border-gray-50">
-        <div className="h-2.5 w-48 bg-gray-100 rounded" />
-      </div>
-      <div className="flex gap-4 px-5 py-8">
-        {[0, 1, 2, 3, 4].map(i => (
-          <div key={i} className="flex-1 space-y-2">
-            <div className="h-2 w-16 bg-gray-100 rounded mx-auto" />
-            <div className="h-8 w-12 bg-gray-100 rounded mx-auto" />
-            <div className="h-2 w-12 bg-gray-100 rounded mx-auto" />
-          </div>
-        ))}
-      </div>
     </div>
   )
 }
@@ -171,9 +187,7 @@ export function NegocioView() {
     return (
       <>
         <NegocioFilters month={month} />
-        <RevenueSkeleton />
-        <KPISkeleton />
-        <WaterfallSkeleton />
+        <PipedriveLoader />
       </>
     )
   }
