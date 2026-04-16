@@ -3,41 +3,60 @@
 import { useRouter } from 'next/navigation'
 
 const MONTH_LABELS = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+  'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+  'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic',
 ]
 
 interface Props {
-  month:      number   // 1–12
-  onRefresh?: () => void
-  isLoading?: boolean
-  cachedAt?:  string | null
+  selectedMonths: number[]   // 1-based, sorted
+  onRefresh?:     () => void
+  isLoading?:     boolean
+  cachedAt?:      string | null
 }
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
 }
 
-export function NegocioFilters({ month, onRefresh, isLoading, cachedAt }: Props) {
+export function NegocioFilters({ selectedMonths, onRefresh, isLoading, cachedAt }: Props) {
   const router   = useRouter()
-  const maxMonth = new Date().getMonth() + 1
+  const maxMonth = new Date().getMonth() + 1  // can't select future months
+
+  function toggle(m: number) {
+    const next = new Set(selectedMonths)
+    if (next.has(m)) {
+      if (next.size === 1) return  // keep at least one month selected
+      next.delete(m)
+    } else {
+      next.add(m)
+    }
+    const sorted = Array.from(next).sort((a, b) => a - b)
+    router.push(`?tab=negocio&months=${sorted.join(',')}`)
+  }
 
   return (
     <div className="flex items-center gap-3 mb-6 flex-wrap">
-      <label className="text-sm text-gray-500 font-medium whitespace-nowrap">
-        Acumulado hasta:
-      </label>
-      <select
-        value={month}
-        onChange={e => router.push(`?tab=negocio&month=${e.target.value}`)}
-        className="text-sm border border-gray-200 rounded-md px-2 py-1 focus:ring-1 focus:ring-[#083D20] focus:outline-none"
-      >
-        {MONTH_LABELS.slice(0, maxMonth).map((label, i) => (
-          <option key={i + 1} value={i + 1}>
-            {label}
-          </option>
-        ))}
-      </select>
+      <span className="text-sm text-gray-500 font-medium whitespace-nowrap">Meses:</span>
+
+      <div className="flex gap-1.5 flex-wrap">
+        {MONTH_LABELS.slice(0, maxMonth).map((label, i) => {
+          const m        = i + 1
+          const selected = selectedMonths.includes(m)
+          return (
+            <button
+              key={m}
+              onClick={() => toggle(m)}
+              className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${
+                selected
+                  ? 'bg-[#083D20] text-white border-[#083D20]'
+                  : 'bg-white text-gray-500 border-gray-200 hover:border-[#083D20] hover:text-[#083D20]'
+              }`}
+            >
+              {label}
+            </button>
+          )
+        })}
+      </div>
 
       {onRefresh && (
         <div className="flex items-center gap-2 ml-auto">

@@ -289,16 +289,19 @@ export async function fetchFunnelConversions(from: Date, to: Date): Promise<Funn
 
 // ─── Bayteca Metrics (Month-field based KPIs + Waterfall) ────
 
-function inMonthRange(raw: unknown, year: number, upToMonth: number): boolean {
+// Returns true when the raw date string's year+month is within the given set.
+function inMonthSet(raw: unknown, year: number, months: number[]): boolean {
   if (!raw || typeof raw !== 'string') return false
   const d = new Date(raw)
   if (isNaN(d.getTime())) return false
-  return d.getFullYear() === year && d.getMonth() + 1 <= upToMonth
+  return d.getFullYear() === year && months.includes(d.getMonth() + 1)
 }
 
-export async function fetchBaytecaMetrics(year: number, upToMonth: number): Promise<BaytecaMetrics> {
-  const from = new Date(year, 0, 1)
-  const to   = new Date(year, upToMonth, 0, 23, 59, 59)
+export async function fetchBaytecaMetrics(year: number, months: number[]): Promise<BaytecaMetrics> {
+  const minMonth = Math.min(...months)
+  const maxMonth = Math.max(...months)
+  const from     = new Date(year, minMonth - 1, 1)
+  const to       = new Date(year, maxMonth, 0, 23, 59, 59)
 
   const [stageMap, allDeals] = await Promise.all([
     fetchStageOrderMap(),
@@ -306,10 +309,10 @@ export async function fetchBaytecaMetrics(year: number, upToMonth: number): Prom
   ])
 
   // ── Cohorts ────────────────────────────────────────────────
-  const bsCohort  = allDeals.filter(d => inMonthRange(d[FIELD_BS_MONTH],        year, upToMonth))
-  const borYtd    = allDeals.filter(d => inMonthRange(d[FIELD_BOR_MONTH],       year, upToMonth))
-  const valYtd    = allDeals.filter(d => inMonthRange(d[FIELD_VALUATION_MONTH], year, upToMonth))
-  const feinYtd   = allDeals.filter(d => inMonthRange(d[FIELD_FEIN_MONTH],      year, upToMonth))
+  const bsCohort = allDeals.filter(d => inMonthSet(d[FIELD_BS_MONTH],        year, months))
+  const borYtd   = allDeals.filter(d => inMonthSet(d[FIELD_BOR_MONTH],       year, months))
+  const valYtd   = allDeals.filter(d => inMonthSet(d[FIELD_VALUATION_MONTH], year, months))
+  const feinYtd  = allDeals.filter(d => inMonthSet(d[FIELD_FEIN_MONTH],      year, months))
 
   const notaryStageOrder = stageMap.get(75) ?? -1
   const hasField = (d: RawFullDeal, field: string) =>
@@ -464,13 +467,13 @@ async function fetchWonDealsForPipeline(pipelineId: number): Promise<RawDeal[]> 
   return all
 }
 
-export async function fetchBaytecaRevenue(from: Date, to: Date): Promise<BaytecaRevenue> {
+export async function fetchBaytecaRevenue(year: number, months: number[]): Promise<BaytecaRevenue> {
   const deals = await fetchWonDealsForPipeline(7)
 
   const inRange = (wonTime: string | null): boolean => {
     if (!wonTime) return false
     const d = new Date(wonTime)
-    return d >= from && d <= to
+    return d.getFullYear() === year && months.includes(d.getMonth() + 1)
   }
 
   const parseNum = (val: unknown): number => {

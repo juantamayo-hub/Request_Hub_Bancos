@@ -8,26 +8,29 @@ export async function GET(request: NextRequest) {
   const sp  = request.nextUrl.searchParams
   const now = new Date()
 
-  const year  = parseInt(sp.get('year')  ?? String(now.getFullYear()), 10)
-  const month = parseInt(sp.get('month') ?? String(now.getMonth() + 1), 10)
+  const year = parseInt(sp.get('year') ?? String(now.getFullYear()), 10)
 
-  if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
-    return NextResponse.json({ error: 'Invalid year/month params' }, { status: 400 })
+  // Accept comma-separated months: ?months=3,4  or legacy ?month=4
+  const monthsRaw = sp.get('months') ?? sp.get('month') ?? String(now.getMonth() + 1)
+  const months    = monthsRaw
+    .split(',')
+    .map(Number)
+    .filter(m => !isNaN(m) && m >= 1 && m <= 12)
+
+  if (isNaN(year) || months.length === 0) {
+    return NextResponse.json({ error: 'Invalid year/months params' }, { status: 400 })
   }
-
-  const from = new Date(year, 0, 1)               // Jan 1
-  const to   = new Date(year, month, 0, 23, 59, 59) // last day of selected month
 
   try {
     const GLOBAL_TIMEOUT_MS = 55_000
     const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Global timeout after 25s')), GLOBAL_TIMEOUT_MS),
+      setTimeout(() => reject(new Error('Global timeout after 55s')), GLOBAL_TIMEOUT_MS),
     )
 
     const [metrics, revenue] = await Promise.race([
       Promise.all([
-        fetchBaytecaMetrics(year, month),
-        fetchBaytecaRevenue(from, to),
+        fetchBaytecaMetrics(year, months),
+        fetchBaytecaRevenue(year, months),
       ]),
       timeout,
     ])
