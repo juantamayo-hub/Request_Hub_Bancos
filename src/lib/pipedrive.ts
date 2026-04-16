@@ -168,21 +168,29 @@ interface RawFullDeal {
   stage_id:       number
   stage_order_nr: number
   status:         string
+  update_time?:   string | null
   [key: string]:  unknown
 }
 
-// Fetches ALL pipeline-7 deals (no early-exit). Required because deals can
-// be created years ago but have BS_MONTH set to the current year when they
-// are submitted to the bank — sorting by add_time and exiting early would
-// miss those deals and produce incorrect cohort counts.
-async function fetchAllPipelineDeals(_from: Date, _to: Date, _explicitFloor?: Date): Promise<RawFullDeal[]> {
-  const all: RawFullDeal[] = []
-  let   start = 0
-  const limit = 500
+// Fetches pipeline-7 deals sorted by update_time DESC, stopping once we see
+// deals last updated before the start of the target year.
+//
+// Why update_time (not add_time):
+//   Deals can be created years ago but only get BS_MONTH/BOR_MONTH/etc. set
+//   in the current year when they progress through stages. Pipedrive always
+//   updates a deal's update_time when any custom field changes, so every deal
+//   with a month-field set in year N will have update_time >= Jan 1, N.
+//   This lets us early-exit safely without missing relevant deals, while
+//   avoiding a full-pipeline scan that would time out.
+async function fetchAllPipelineDeals(from: Date, _to: Date, _explicitFloor?: Date): Promise<RawFullDeal[]> {
+  const all:       RawFullDeal[] = []
+  let   start    = 0
+  const limit    = 500
+  const yearFloor = new Date(from.getFullYear(), 0, 1)  // Jan 1 of target year
 
   for (let page = 0; page < MAX_PAGES; page++) {
     const url =
-      `${BASE_URL}/deals?pipeline_id=7&status=all_not_deleted&start=${start}&limit=${limit}&api_token=${API_TOKEN}`
+      `${BASE_URL}/deals?pipeline_id=7&status=all_not_deleted&sort=update_time+DESC&start=${start}&limit=${limit}&api_token=${API_TOKEN}`
 
     let json: {
       success: boolean
@@ -207,6 +215,10 @@ async function fetchAllPipelineDeals(_from: Date, _to: Date, _explicitFloor?: Da
     if (!json.success || !Array.isArray(json.data) || json.data.length === 0) break
 
     all.push(...json.data)
+
+    // Early-exit: last deal on this page was updated before the target year
+    const lastUpdate = json.data[json.data.length - 1]?.update_time
+    if (lastUpdate && new Date(lastUpdate) < yearFloor) break
 
     if (!json.additional_data?.pagination?.more_items_in_collection) break
     start += limit
