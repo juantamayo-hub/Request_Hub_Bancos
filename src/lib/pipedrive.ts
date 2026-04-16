@@ -173,20 +173,20 @@ interface RawFullDeal {
 }
 
 // Fetches pipeline-7 deals sorted by update_time DESC, stopping once we see
-// deals last updated before the start of the target year.
+// deals last updated before `from` (first day of the min selected month).
 //
 // Why update_time (not add_time):
 //   Deals can be created years ago but only get BS_MONTH/BOR_MONTH/etc. set
-//   in the current year when they progress through stages. Pipedrive always
-//   updates a deal's update_time when any custom field changes, so every deal
-//   with a month-field set in year N will have update_time >= Jan 1, N.
-//   This lets us early-exit safely without missing relevant deals, while
-//   avoiding a full-pipeline scan that would time out.
+//   when they progress through stages. Pipedrive always updates a deal's
+//   update_time when any custom field changes, so every deal with a month-field
+//   set in month M will have update_time >= first day of M.
+//   Using `from` as the floor (e.g. April 1 for a single-April view) means we
+//   typically only fetch 1-3 pages instead of scanning the full pipeline.
 async function fetchAllPipelineDeals(from: Date, _to: Date, _explicitFloor?: Date): Promise<RawFullDeal[]> {
-  const all:       RawFullDeal[] = []
-  let   start    = 0
-  const limit    = 500
-  const yearFloor = new Date(from.getFullYear(), 0, 1)  // Jan 1 of target year
+  const all:    RawFullDeal[] = []
+  let   start = 0
+  const limit = 500
+  const floor = from  // first day of the min selected month
 
   for (let page = 0; page < MAX_PAGES; page++) {
     const url =
@@ -216,9 +216,9 @@ async function fetchAllPipelineDeals(from: Date, _to: Date, _explicitFloor?: Dat
 
     all.push(...json.data)
 
-    // Early-exit: last deal on this page was updated before the target year
+    // Early-exit: last deal on this page was updated before the selected range
     const lastUpdate = json.data[json.data.length - 1]?.update_time
-    if (lastUpdate && new Date(lastUpdate) < yearFloor) break
+    if (lastUpdate && new Date(lastUpdate) < floor) break
 
     if (!json.additional_data?.pagination?.more_items_in_collection) break
     start += limit
@@ -433,14 +433,15 @@ export interface BaytecaRevenue {
   dealCount:     number
 }
 
-async function fetchWonDealsForPipeline(pipelineId: number): Promise<RawDeal[]> {
+async function fetchWonDealsForPipeline(pipelineId: number, fromDate?: Date): Promise<RawDeal[]> {
   const all: RawDeal[] = []
   let start = 0
   const limit = 500
 
   for (let page = 0; page < MAX_PAGES; page++) {
+    // Sort by won_time DESC so we can early-exit once past the target window
     const url =
-      `${BASE_URL}/deals?pipeline_id=${pipelineId}&status=won&start=${start}&limit=${limit}&api_token=${API_TOKEN}`
+      `${BASE_URL}/deals?pipeline_id=${pipelineId}&status=won&sort=won_time+DESC&start=${start}&limit=${limit}&api_token=${API_TOKEN}`
 
     let json: { success: boolean; data: RawDeal[]; additional_data?: { pagination?: { more_items_in_collection?: boolean } } }
     try {
@@ -460,6 +461,13 @@ async function fetchWonDealsForPipeline(pipelineId: number): Promise<RawDeal[]> 
 
     if (!json.success || !Array.isArray(json.data) || json.data.length === 0) break
     all.push(...json.data)
+
+    // Early-exit: last deal on page was won before our floor date
+    if (fromDate) {
+      const lastWon = json.data[json.data.length - 1]?.won_time
+      if (lastWon && new Date(lastWon) < fromDate) break
+    }
+
     if (!json.additional_data?.pagination?.more_items_in_collection) break
     start += limit
   }
@@ -468,7 +476,9 @@ async function fetchWonDealsForPipeline(pipelineId: number): Promise<RawDeal[]> 
 }
 
 export async function fetchBaytecaRevenue(year: number, months: number[]): Promise<BaytecaRevenue> {
-  const deals = await fetchWonDealsForPipeline(7)
+  // Start from Jan 1 of the target year so we fetch all won deals in that year,
+  // regardless of which months are selected for the funnel filter.
+  const deals = await fetchWonDealsForPipeline(7, new Date(year, 0, 1))
 
   const inRange = (wonTime: string | null): boolean => {
     if (!wonTime) return false
