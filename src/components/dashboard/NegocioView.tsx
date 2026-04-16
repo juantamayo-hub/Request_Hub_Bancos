@@ -37,6 +37,36 @@ interface ApiData {
   revenue: BaytecaRevenue
 }
 
+// ── Session cache helpers ─────────────────────────────────────
+
+const CACHE_VERSION = 'v1'
+
+function cacheKey(year: number, month: number) {
+  return `negocio_${CACHE_VERSION}_${year}_${month}`
+}
+
+interface CacheEntry { data: ApiData; ts: string }
+
+function loadCache(year: number, month: number): CacheEntry | null {
+  try {
+    const raw = sessionStorage.getItem(cacheKey(year, month))
+    if (!raw) return null
+    return JSON.parse(raw) as CacheEntry
+  } catch { return null }
+}
+
+function saveCache(year: number, month: number, data: ApiData): string {
+  const ts = new Date().toISOString()
+  try { sessionStorage.setItem(cacheKey(year, month), JSON.stringify({ data, ts })) } catch { /* ignore */ }
+  return ts
+}
+
+function clearCache(year: number, month: number) {
+  try { sessionStorage.removeItem(cacheKey(year, month)) } catch { /* ignore */ }
+}
+
+// ── Formatting ────────────────────────────────────────────────
+
 function formatEUR(amount: number): string {
   return new Intl.NumberFormat('es-ES', {
     style:    'currency',
@@ -121,7 +151,7 @@ function PipedriveLoader() {
           {LOADING_STEPS[stepIdx].replace('...', '')}{dots}
         </p>
         <p className="text-xs text-gray-400 mt-1">
-          Pipedrive procesa hasta miles de deals — esto puede tardar 10–20 segundos
+          Pipedrive procesa hasta miles de deals — esto puede tardar hasta un minuto
         </p>
       </div>
 
@@ -160,95 +190,120 @@ export function NegocioView() {
   const raw   = parseInt(searchParams.get('month') ?? String(currentMonth), 10)
   const month = isNaN(raw) || raw < 1 || raw > 12 ? currentMonth : raw
 
-  const [data,    setData]    = useState<ApiData | null>(null)
-  const [error,   setError]   = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [data,       setData]       = useState<ApiData | null>(null)
+  const [error,      setError]      = useState(false)
+  const [loading,    setLoading]    = useState(true)
+  const [cachedAt,   setCachedAt]   = useState<string | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
+
+    // Check session cache first — avoid re-fetching on every navigation
+    const cached = loadCache(year, month)
+    if (cached) {
+      setData(cached.data)
+      setCachedAt(cached.ts)
+      setLoading(false)
+      setError(false)
+      return
+    }
+
     setLoading(true)
     setError(false)
     setData(null)
+    setCachedAt(null)
 
     fetch(`/api/dashboard/negocio?year=${year}&month=${month}`)
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return res.json() as Promise<ApiData>
       })
-      .then(json => { if (!cancelled) { setData(json); setLoading(false) } })
+      .then(json => {
+        if (!cancelled) {
+          const ts = saveCache(year, month, json)
+          setData(json)
+          setCachedAt(ts)
+          setLoading(false)
+        }
+      })
       .catch(() => { if (!cancelled) { setError(true); setLoading(false) } })
 
     return () => { cancelled = true }
-  }, [month, year])
+  }, [month, year, refreshKey])
 
-  const period    = `Ene ${year} – ${MONTH_SHORT[month]} ${year}`
-
-  if (loading) {
-    return (
-      <>
-        <NegocioFilters month={month} />
-        <PipedriveLoader />
-      </>
-    )
+  function handleRefresh() {
+    clearCache(year, month)
+    setRefreshKey(k => k + 1)
   }
 
-  if (error || !data) {
-    return (
-      <>
-        <NegocioFilters month={month} />
-        <div className="bg-white border border-gray-100 rounded-xl p-5 mb-6">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
-            Revenue · Operaciones Ganadas
-          </p>
-          <p className="text-sm text-gray-400 mt-2">No se pudo cargar el revenue desde Pipedrive.</p>
-        </div>
-        <div className="bg-white border border-gray-100 rounded-xl p-5 mb-6">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
-            Funnel de Conversión · Bayteca Bank Area
-          </p>
-          <p className="text-sm text-gray-400 mt-2">No se pudo cargar el funnel desde Pipedrive.</p>
-        </div>
-      </>
-    )
-  }
+  const period = `Ene ${year} – ${MONTH_SHORT[month]} ${year}`
 
   return (
     <>
-      <NegocioFilters month={month} />
+      <NegocioFilters
+        month={month}
+        onRefresh={handleRefresh}
+        isLoading={loading}
+        cachedAt={cachedAt}
+      />
 
-      {/* Revenue */}
-      <div className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-6">
-        <div className="px-6 pt-4 pb-0 border-b border-gray-50">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 pb-3">
-            Revenue · Operaciones Ganadas
-          </p>
-        </div>
-        <BaytecaRevenueCard revenue={data.revenue} dateRange={period} />
-      </div>
+      {loading && <PipedriveLoader />}
 
-      {/* KPI Funnel */}
-      <div className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-6">
-        <div className="px-6 pt-4 pb-0 border-b border-gray-50">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 pb-3">
-            Funnel de Conversión · Bayteca Bank Area
-          </p>
-        </div>
-        <FunnelKPIStrip
-          kpis={data.kpis}
-          bsTotal={data.bsTotal}
-          period={period}
-        />
-      </div>
+      {!loading && (error || !data) && (
+        <>
+          <div className="bg-white border border-gray-100 rounded-xl p-5 mb-6">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
+              Revenue · Operaciones Ganadas
+            </p>
+            <p className="text-sm text-gray-400 mt-2">No se pudo cargar el revenue desde Pipedrive.</p>
+          </div>
+          <div className="bg-white border border-gray-100 rounded-xl p-5 mb-6">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
+              Funnel de Conversión · Bayteca Bank Area
+            </p>
+            <p className="text-sm text-gray-400 mt-2">No se pudo cargar el funnel desde Pipedrive.</p>
+          </div>
+        </>
+      )}
 
-      {/* Waterfall */}
-      <div className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-6">
-        <div className="px-6 pt-4 pb-0 border-b border-gray-50">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 pb-3">
-            Progresión del Funnel · BS Cohort
-          </p>
-        </div>
-        <FunnelWaterfall stages={data.funnel} />
-      </div>
+      {!loading && data && (
+        <>
+          {/* Revenue */}
+          <div className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-6">
+            <div className="px-6 pt-4 pb-0 border-b border-gray-50">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 pb-3">
+                Revenue · Operaciones Ganadas
+              </p>
+            </div>
+            <BaytecaRevenueCard revenue={data.revenue} dateRange={period} />
+          </div>
+
+          {/* KPI Funnel */}
+          <div className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-6">
+            <div className="px-6 pt-4 pb-0 border-b border-gray-50">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 pb-3">
+                Funnel de Conversión · Bayteca Bank Area
+              </p>
+            </div>
+            <FunnelKPIStrip
+              kpis={data.kpis}
+              bsTotal={data.bsTotal}
+              period={period}
+            />
+          </div>
+
+          {/* Waterfall */}
+          <div className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-6">
+            <div className="px-6 pt-4 pb-0 border-b border-gray-50">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 pb-3">
+                Progresión del Funnel · BS Cohort
+              </p>
+            </div>
+            <FunnelWaterfall stages={data.funnel} />
+          </div>
+        </>
+      )}
     </>
   )
 }

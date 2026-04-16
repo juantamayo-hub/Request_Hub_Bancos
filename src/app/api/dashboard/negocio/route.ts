@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   const to   = new Date(year, month, 0, 23, 59, 59) // last day of selected month
 
   try {
-    const GLOBAL_TIMEOUT_MS = 25_000
+    const GLOBAL_TIMEOUT_MS = 55_000
     const timeout = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('Global timeout after 25s')), GLOBAL_TIMEOUT_MS),
     )

@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/check-overdue-deals",
+      "schedule": "0 6,12 * * 1-5"
+    }
+  ]
+}

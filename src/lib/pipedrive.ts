@@ -171,32 +171,27 @@ interface RawFullDeal {
   [key: string]:  unknown
 }
 
-interface RawFullDealWithTime extends RawFullDeal {
-  add_time: string | null
-}
-
-// Fetches pipeline-7 deals sorted newest-first, stops early once add_time
-// passes before the hard floor. Pass `explicitFloor` to override the default
-// (from - 90 days) — useful when fetching a longer historical window.
-async function fetchAllPipelineDeals(from: Date, _to: Date, explicitFloor?: Date): Promise<RawFullDeal[]> {
+// Fetches ALL pipeline-7 deals (no early-exit). Required because deals can
+// be created years ago but have BS_MONTH set to the current year when they
+// are submitted to the bank — sorting by add_time and exiting early would
+// miss those deals and produce incorrect cohort counts.
+async function fetchAllPipelineDeals(_from: Date, _to: Date, _explicitFloor?: Date): Promise<RawFullDeal[]> {
   const all: RawFullDeal[] = []
   let   start = 0
   const limit = 500
-  const hardFloor = explicitFloor ?? new Date(from.getTime() - 90 * 24 * 60 * 60 * 1000)
 
   for (let page = 0; page < MAX_PAGES; page++) {
-    // sort=add_time+DESC → newest deals first → early-exit once we're past the window
     const url =
-      `${BASE_URL}/deals?pipeline_id=7&status=all_not_deleted&sort=add_time+DESC&start=${start}&limit=${limit}&api_token=${API_TOKEN}`
+      `${BASE_URL}/deals?pipeline_id=7&status=all_not_deleted&start=${start}&limit=${limit}&api_token=${API_TOKEN}`
 
     let json: {
       success: boolean
-      data: RawFullDealWithTime[]
+      data: RawFullDeal[]
       additional_data?: { pagination?: { more_items_in_collection?: boolean } }
     }
     try {
       const res = await fetch(url, {
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(12_000),
         cache:  'no-store',
       })
       if (!res.ok) {
@@ -213,14 +208,11 @@ async function fetchAllPipelineDeals(from: Date, _to: Date, explicitFloor?: Date
 
     all.push(...json.data)
 
-    // Early-exit: last deal on this page is older than our hard floor
-    const lastDeal = json.data[json.data.length - 1]
-    if (lastDeal?.add_time && new Date(lastDeal.add_time) < hardFloor) break
-
     if (!json.additional_data?.pagination?.more_items_in_collection) break
     start += limit
   }
 
+  console.log(`[pipedrive] fetchAllPipelineDeals: fetched ${all.length} deals (${Math.ceil(all.length / limit)} pages)`)
   return all
 }
 
@@ -293,13 +285,12 @@ function inMonthRange(raw: unknown, year: number, upToMonth: number): boolean {
 }
 
 export async function fetchBaytecaMetrics(year: number, upToMonth: number): Promise<BaytecaMetrics> {
-  const hardFloor = new Date(year - 1, 6, 1)          // Jul 1 of previous year
-  const from      = new Date(year, 0, 1)               // Jan 1 (for interface compat)
-  const to        = new Date(year, upToMonth, 0, 23, 59, 59)
+  const from = new Date(year, 0, 1)
+  const to   = new Date(year, upToMonth, 0, 23, 59, 59)
 
   const [stageMap, allDeals] = await Promise.all([
     fetchStageOrderMap(),
-    fetchAllPipelineDeals(from, to, hardFloor),
+    fetchAllPipelineDeals(from, to),
   ])
 
   // ── Cohorts ────────────────────────────────────────────────
@@ -373,6 +364,42 @@ export async function fetchBaytecaMetrics(year: number, upToMonth: number): Prom
   return { bsTotal, kpis, funnel }
 }
 
+// ─── Stage Deals (for cron overdue checks) ───────────────────
+
+export interface StageDeal {
+  id:       number
+  title:    string
+  status:   string
+  stage_id: number
+  owner_id: { name?: string; email?: string } | null
+  [key: string]: unknown
+}
+
+// Fetches all open deals currently in a specific stage of pipeline 7.
+// Used by the overdue-alert cron job — much more efficient than fetching
+// the full pipeline because it only returns deals in the target stage.
+export async function fetchOpenDealsInStage(stageId: number): Promise<StageDeal[]> {
+  const all: StageDeal[] = []
+  let   start = 0
+  const limit = 500
+
+  for (let page = 0; page < 20; page++) {
+    const url =
+      `${BASE_URL}/deals?pipeline_id=7&stage_id=${stageId}&status=open&start=${start}&limit=${limit}&api_token=${API_TOKEN}`
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(10_000), cache: 'no-store' })
+      if (!res.ok) break
+      const json = await res.json()
+      if (!json.success || !Array.isArray(json.data) || json.data.length === 0) break
+      all.push(...json.data as StageDeal[])
+      if (!json.additional_data?.pagination?.more_items_in_collection) break
+      start += limit
+    } catch { break }
+  }
+
+  return all
+}
+
 // ─── Revenue Calculation ──────────────────────────────────────
 
 interface RawDeal {
@@ -382,7 +409,7 @@ interface RawDeal {
   [key: string]: unknown
 }
 
-const MAX_PAGES = 20  // safety cap: 20 × 500 = 10 000 deals max per fetch
+const MAX_PAGES = 100  // safety cap: 100 × 500 = 50 000 deals max per fetch
 
 export interface BaytecaRevenue {
   bankFee:       number
