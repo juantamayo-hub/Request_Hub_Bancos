@@ -297,16 +297,72 @@ function inMonthSet(raw: unknown, year: number, months: number[]): boolean {
   return d.getFullYear() === year && months.includes(d.getMonth() + 1)
 }
 
+// Fetches deals using a saved Pipedrive filter (by filter_id).
+// Much more efficient than full-pipeline scans: only returns matching deals.
+async function fetchDealsByFilterId(filterId: number): Promise<RawFullDeal[]> {
+  const all: RawFullDeal[] = []
+  let   start = 0
+  const limit = 500
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const url =
+      `${BASE_URL}/deals?filter_id=${filterId}&start=${start}&limit=${limit}&api_token=${API_TOKEN}`
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(12_000), cache: 'no-store' })
+      if (!res.ok) { console.warn(`[pipedrive] filter ${filterId} page=${page} status=${res.status}`); break }
+      const json = await res.json()
+      if (!json.success || !Array.isArray(json.data) || json.data.length === 0) break
+      all.push(...json.data as RawFullDeal[])
+      if (!json.additional_data?.pagination?.more_items_in_collection) break
+      start += limit
+    } catch (err) { console.warn(`[pipedrive] filter ${filterId} page=${page} error:`, err); break }
+  }
+
+  console.log(`[pipedrive] fetchDealsByFilterId(${filterId}): ${all.length} deals`)
+  return all
+}
+
+// Looks up the Pipedrive saved filter for BS_MONTH = current year.
+// Checks PIPEDRIVE_BS_FILTER_ID env var first (fast path), then searches
+// the filter list by name (cached 1h).
+async function findBSYearFilter(year: number): Promise<number | null> {
+  const envId = process.env.PIPEDRIVE_BS_FILTER_ID
+  if (envId) return parseInt(envId, 10)
+
+  try {
+    const url = `${BASE_URL}/filters?type=deals&api_token=${API_TOKEN}`
+    const res = await fetch(url, { next: { revalidate: 3600 } })
+    if (!res.ok) return null
+    const json = await res.json() as { success: boolean; data?: { id: number; name: string }[] }
+    if (!json.success || !json.data) return null
+
+    const yearStr = String(year)
+    const match   = json.data.find(f =>
+      f.name.toLowerCase().includes('bs month') && f.name.includes(yearStr),
+    )
+    if (match) console.log(`[pipedrive] found BS filter: "${match.name}" id=${match.id}`)
+    return match?.id ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function fetchBaytecaMetrics(year: number, months: number[]): Promise<BaytecaMetrics> {
   const minMonth = Math.min(...months)
   const maxMonth = Math.max(...months)
   const from     = new Date(year, minMonth - 1, 1)
   const to       = new Date(year, maxMonth, 0, 23, 59, 59)
 
-  const [stageMap, allDeals] = await Promise.all([
+  const [stageMap, filterId] = await Promise.all([
     fetchStageOrderMap(),
-    fetchAllPipelineDeals(from, to),
+    findBSYearFilter(year),
   ])
+
+  // Use saved filter when available (returns only BS-month deals, ~14 pages
+  // instead of 38+). Fall back to full pipeline scan when no filter is found.
+  const allDeals = filterId
+    ? await fetchDealsByFilterId(filterId)
+    : await fetchAllPipelineDeals(from, to)
 
   // ── Cohorts ────────────────────────────────────────────────
   const bsCohort = allDeals.filter(d => inMonthSet(d[FIELD_BS_MONTH],        year, months))
