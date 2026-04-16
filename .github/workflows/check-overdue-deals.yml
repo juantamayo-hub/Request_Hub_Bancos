@@ -1,0 +1,19 @@
+name: Check Overdue Deals
+
+on:
+  schedule:
+    # 8:00 and 14:00 Madrid time (CEST, UTC+2) — Monday to Friday
+    - cron: '0 6 * * 1-5'   # 8am Madrid
+    - cron: '0 12 * * 1-5'  # 2pm Madrid
+  workflow_dispatch:          # allow manual trigger from GitHub UI
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger overdue deal check
+        run: |
+          curl -s -f -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/cron/check-overdue-deals"
