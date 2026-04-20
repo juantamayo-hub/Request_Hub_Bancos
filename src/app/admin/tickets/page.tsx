@@ -14,6 +14,7 @@ interface Props {
     status?:   TicketStatus
     priority?: TicketPriority
     q?:        string
+    assignee?: string
   }>
 }
 
@@ -34,13 +35,17 @@ export default async function AdminTicketsPage({ searchParams }: Props) {
 
   if (sp.status)   query = query.eq('status', sp.status)
   if (sp.priority) query = query.eq('priority', sp.priority)
+  if (sp.assignee) query = query.eq('assignee_id', sp.assignee)
   if (sp.q) {
     query = query.or(
       `subject.ilike.%${sp.q}%,display_id.ilike.%${sp.q}%`,
     )
   }
 
-  const { data: tickets } = await query.order('created_at', { ascending: false })
+  const [{ data: tickets }, { data: admins }] = await Promise.all([
+    query.order('created_at', { ascending: false }),
+    supabase.from('profiles').select('id, email, first_name, last_name').eq('role', 'admin').order('first_name'),
+  ])
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#FAFAF8' }}>
@@ -58,7 +63,7 @@ export default async function AdminTicketsPage({ searchParams }: Props) {
           </Link>
         </div>
 
-        <AdminFilters current={sp} />
+        <AdminFilters current={sp} admins={admins ?? []} />
 
         <div className="mt-4">
           <TicketList

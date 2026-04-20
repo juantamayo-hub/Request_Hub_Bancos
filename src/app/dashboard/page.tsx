@@ -166,6 +166,7 @@ export default async function DashboardPage({
   // ── Derive: operations by category ──────────────────────────
   const catOps: Record<string, { open: number; closed: number }> = {}
   const bankOps: Record<string, { open: number; closed: number }> = {}
+  const bankCatOps: Record<string, Record<string, { open: number; closed: number }>> = {}
   const priorityCounts: Record<TicketPriority, number> = { low: 0, medium: 0, high: 0 }
   const ageBuckets = { '1-3d': 0, '3-7d': 0, '7d+': 0 }
 
@@ -174,12 +175,15 @@ export default async function DashboardPage({
     const bankName = t.bank_name ?? 'Sin banco'
     const isOpen   = !['resolved', 'closed'].includes(t.status)
 
-    if (!catOps[catName])  catOps[catName]  = { open: 0, closed: 0 }
+    if (!catOps[catName])   catOps[catName]   = { open: 0, closed: 0 }
     if (!bankOps[bankName]) bankOps[bankName] = { open: 0, closed: 0 }
+    if (!bankCatOps[bankName]) bankCatOps[bankName] = {}
+    if (!bankCatOps[bankName][catName]) bankCatOps[bankName][catName] = { open: 0, closed: 0 }
 
     if (isOpen) {
       catOps[catName].open++
       bankOps[bankName].open++
+      bankCatOps[bankName][catName].open++
       const p = t.priority as TicketPriority
       if (p in priorityCounts) priorityCounts[p]++
       const ageDays = (now.getTime() - new Date(t.created_at).getTime()) / (1000 * 60 * 60 * 24)
@@ -189,11 +193,15 @@ export default async function DashboardPage({
     } else {
       catOps[catName].closed++
       bankOps[bankName].closed++
+      bankCatOps[bankName][catName].closed++
     }
   }
 
   const operationsByCategory = Object.entries(catOps).map(([name, v]) => ({ name, ...v }))
-  const operationsByBank     = Object.entries(bankOps).map(([name, v]) => ({ name, ...v }))
+  const operationsByBank     = Object.entries(bankOps).map(([name, v]) => ({
+    name, ...v,
+    categories: Object.entries(bankCatOps[name] ?? {}).map(([catName, cv]) => ({ name: catName, ...cv })),
+  }))
 
   const ticketsByPriority: DashboardMetrics['ticketsByPriority'] = [
     { priority: 'high',   count: priorityCounts.high   },

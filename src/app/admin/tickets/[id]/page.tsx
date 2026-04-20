@@ -127,7 +127,7 @@ export default async function AdminTicketDetailPage({ params }: Props) {
                 <div>
                   <p className="text-gray-500 mb-0.5">Solicitante</p>
                   <p className="font-medium">{displayName(t.profiles)}</p>
-                  <p className="text-gray-400 text-xs">{t.profiles.email}</p>
+                  <p className="text-gray-400 text-xs">{t.profiles?.email ?? 'Sistema'}</p>
                 </div>
                 <div>
                   <p className="text-gray-500 mb-0.5">Creado</p>

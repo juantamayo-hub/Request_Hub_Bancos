@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient }         from '@/lib/supabase/admin'
-import { fetchOpenDealsInStage }     from '@/lib/pipedrive'
+import { NextRequest, NextResponse }                    from 'next/server'
+import { createAdminClient }                            from '@/lib/supabase/admin'
+import { fetchOpenDealsInStage }                        from '@/lib/pipedrive'
+import { postSlackDM, buildCronSummaryMessage }         from '@/lib/notifications/slack'
 
 // ── Vercel Cron config ────────────────────────────────────────
 // Schedule defined in vercel.json: "0 6,12 * * 1-5"
@@ -63,6 +64,14 @@ function hoursElapsed(raw: unknown): number {
   return (Date.now() - d.getTime()) / (1000 * 60 * 60)
 }
 
+// Returns 'high' if the deal just entered the overdue window (< 2× threshold),
+// 'medium' if it has been stuck longer. FEIN is always 'high'.
+function derivePriority(rule: OverdueRule, hours: number): 'high' | 'medium' {
+  if (!rule.maxThresholdHours) return 'high'              // FEIN (no upper bound set)
+  const highCeiling = rule.thresholdHours * 2             // e.g. BS: 96h, Val: 240h
+  return hours <= highCeiling ? 'high' : 'medium'
+}
+
 function formatDuration(hours: number): string {
   const days = Math.floor(hours / 24)
   const rem  = Math.floor(hours % 24)
@@ -97,6 +106,9 @@ export async function GET(request: NextRequest) {
 
   let totalCreated = 0
   const summary: string[] = []
+
+  // Per-assignee summary: email → [{ categoryName, count }]
+  const assigneeSummaries = new Map<string, Array<{ categoryName: string; count: number }>>()
 
   // Fetch all stages from Pipedrive in parallel
   console.log('[cron] starting Pipedrive fetches', new Date().toISOString())
@@ -206,7 +218,7 @@ export async function GET(request: NextRequest) {
         category_id:       categoryId,
         subject:           `[Auto] ${rule.categoryName} – Deal #${dealId} – ${bankName}`,
         description,
-        priority:          'high' as const,
+        priority:          derivePriority(rule, hours),
         status:            'new' as const,
         sla_hours:         48,
         sla_deadline:      slaDeadline,
@@ -222,8 +234,35 @@ export async function GET(request: NextRequest) {
 
     const created = insertErr ? 0 : newDeals.length
     totalCreated += created
+
+    // Accumulate per-assignee counts for summary DM
+    if (!insertErr) {
+      for (let i = 0; i < newDeals.length; i++) {
+        const email = (assigneeEmails as string[] | null)?.[i]
+        if (!email) continue
+        if (!assigneeSummaries.has(email)) assigneeSummaries.set(email, [])
+        const entries = assigneeSummaries.get(email)!
+        let entry = entries.find(e => e.categoryName === rule.categoryName)
+        if (!entry) { entry = { categoryName: rule.categoryName, count: 0 }; entries.push(entry) }
+        entry.count++
+      }
+    }
     summary.push(
       `${rule.categoryName}: ${deals.length} deals en stage, ${created} tickets creados, ${skipped} ya existían`,
+    )
+  }
+
+  // ── Send one summary DM per assignee ─────────────────────────
+  if (assigneeSummaries.size > 0) {
+    const appUrl    = process.env.NEXT_PUBLIC_APP_URL ?? ''
+    const timeLabel = new Date().toLocaleTimeString('es-ES', {
+      hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid',
+    })
+    await Promise.all(
+      Array.from(assigneeSummaries.entries()).map(([email, cats]) => {
+        const total = cats.reduce((s, c) => s + c.count, 0)
+        return postSlackDM(email, buildCronSummaryMessage({ timeLabel, appUrl, categories: cats, total }))
+      }),
     )
   }
 

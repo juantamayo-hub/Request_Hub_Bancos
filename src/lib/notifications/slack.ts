@@ -289,6 +289,49 @@ export function buildStatusChangedRequesterMessage(p: {
 }
 
 /**
+ * DM sent to an assignee after a cron run, summarising how many
+ * auto-generated tickets were assigned to them across all categories.
+ */
+export function buildCronSummaryMessage(p: {
+  timeLabel:  string
+  appUrl:     string
+  categories: Array<{ name: string; count: number }>
+  total:      number
+}): SlackMessage {
+  const lines = p.categories
+    .map(c => `• *${c.name}:* ${c.count} ticket${c.count !== 1 ? 's' : ''}`)
+    .join('\n')
+
+  return {
+    text: `Se te asignaron ${p.total} ticket${p.total !== 1 ? 's' : ''} nuevos`,
+    blocks: [
+      {
+        type: 'header',
+        text: { type: 'plain_text', text: `📋 Tickets asignados — ${p.timeLabel}` },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `Se te asignaron *${p.total} ticket${p.total !== 1 ? 's' : ''}* nuevos en esta pasada:\n\n${lines}`,
+        },
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type:  'button',
+            style: 'primary',
+            text:  { type: 'plain_text', text: 'Ver mis tickets' },
+            url:   `${p.appUrl}/admin/tickets`,
+          },
+        ],
+      },
+    ],
+  }
+}
+
+/**
  * DM sent to the requester when their ticket is cancelled.
  * Includes the cancellation reason provided by the admin.
  */
