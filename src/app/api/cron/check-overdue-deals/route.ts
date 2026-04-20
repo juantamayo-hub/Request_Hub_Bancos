@@ -122,22 +122,56 @@ export async function GET(request: NextRequest) {
   let totalCreated = 0
   const summary: string[] = []
 
-  for (const rule of OVERDUE_RULES) {
-    const categoryId = categoryMap.get(rule.categoryName)
+  // Fetch all stages from Pipedrive in parallel
+  const stageResults = await Promise.all(
+    OVERDUE_RULES.map(async rule => {
+      const categoryId = categoryMap.get(rule.categoryName)
+      if (!categoryId) return { rule, categoryId: null, deals: [] }
+      try {
+        const deals = await fetchOpenDealsInStage(rule.stageId)
+        return { rule, categoryId, deals }
+      } catch (err) {
+        console.error(`[cron] fetchOpenDealsInStage(${rule.stageId}) failed:`, err)
+        return { rule, categoryId, deals: null }
+      }
+    })
+  )
+
+  for (const { rule, categoryId, deals } of stageResults) {
     if (!categoryId) {
       summary.push(`SKIP ${rule.categoryName}: not in DB`)
       continue
     }
-
-    let deals
-    try {
-      deals = await fetchOpenDealsInStage(rule.stageId)
-    } catch (err) {
+    if (!deals) {
       summary.push(`ERROR ${rule.categoryName}: Pipedrive fetch failed`)
-      console.error(`[cron] fetchOpenDealsInStage(${rule.stageId}) failed:`, err)
       continue
     }
 
+    // Filter overdue deals first, before any DB queries
+    const overdueDealIds = deals
+      .filter(deal => {
+        const hours = hoursElapsed(deal[rule.timestampField])
+        return hours >= rule.thresholdHours &&
+          (!rule.maxThresholdHours || hours <= rule.maxThresholdHours)
+      })
+      .map(deal => deal.id)
+
+    if (overdueDealIds.length === 0) {
+      summary.push(`${rule.categoryName}: ${deals.length} deals en stage, 0 tickets creados, 0 ya existían`)
+      continue
+    }
+
+    // Batch deduplication: one query for all overdue deals in this category
+    const { data: existingTickets } = await admin
+      .from('tickets')
+      .select('pipedrive_deal_id')
+      .eq('category_id', categoryId)
+      .in('status', ['new', 'in_progress', 'waiting_on_employee'])
+      .in('pipedrive_deal_id', overdueDealIds)
+
+    const existingDealIds = new Set((existingTickets ?? []).map(t => t.pipedrive_deal_id))
+
+    const assigneeId = await resolveOwner(categoryId)
     let created = 0
     let skipped = 0
 
@@ -146,22 +180,13 @@ export async function GET(request: NextRequest) {
       if (hours < rule.thresholdHours) continue
       if (rule.maxThresholdHours && hours > rule.maxThresholdHours) continue
 
-      const dealId   = deal.id
-      const bankName = (deal[FIELD_BANK_NAME] as string | null)
+      const dealId = deal.id
+
+      if (existingDealIds.has(dealId)) { skipped++; continue }
+
+      const bankName     = (deal[FIELD_BANK_NAME] as string | null)
         ?? (deal.title as string | null)
         ?? `Deal #${dealId}`
-
-      // Deduplication: skip if an open ticket already exists for this deal + category
-      const { data: existing } = await admin
-        .from('tickets')
-        .select('id')
-        .eq('pipedrive_deal_id', dealId)
-        .eq('category_id', categoryId)
-        .in('status', ['new', 'in_progress', 'waiting_on_employee'])
-        .maybeSingle()
-
-      if (existing) { skipped++; continue }
-
       const ownerName    = deal.owner_id?.name ?? 'Sin asignar'
       const pipedriveUrl = `https://app.pipedrive.com/deal/${dealId}`
       const timeStr      = formatDuration(hours)
@@ -175,11 +200,10 @@ export async function GET(request: NextRequest) {
         `Ticket generado automáticamente por Request Hub Bancos.`,
       ].join('\n')
 
-      const assigneeId  = await resolveOwner(categoryId)
       const slaDeadline = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
 
       const { error: insertErr } = await admin.from('tickets').insert({
-        created_by:        null,  // auto-generated — no human author
+        created_by:        null,
         assignee_id:       assigneeId,
         category_id:       categoryId,
         subject:           `[Auto] ${rule.categoryName} – Deal #${dealId} – ${bankName}`,
