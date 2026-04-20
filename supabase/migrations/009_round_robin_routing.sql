@@ -90,9 +90,13 @@ UPDATE routing_rules SET assignee_emails = ARRAY[
   'ana.rodriguez@bayteca.com'
 ] WHERE category_id = (SELECT id FROM categories WHERE name = 'Otra');
 
--- System categories (single assignee)
+-- Bank Submission Overdue → Florencia
+UPDATE routing_rules SET assignee_emails = ARRAY['florencia.fernandez@bayteca.com']
+WHERE category_id = (SELECT id FROM categories WHERE name = 'Bank Submission Overdue');
+
+-- Valuation Overdue + FEIN Overdue → Cecilia
 UPDATE routing_rules SET assignee_emails = ARRAY['cecilia.parent@bayteca.com']
-WHERE category_id IN (SELECT id FROM categories WHERE is_system = TRUE);
+WHERE category_id IN (SELECT id FROM categories WHERE is_system = TRUE AND name != 'Bank Submission Overdue');
 
 -- ── Batch round-robin picker (used by cron for bulk inserts) ──
 -- Returns an array of N emails advancing the counter atomically.
