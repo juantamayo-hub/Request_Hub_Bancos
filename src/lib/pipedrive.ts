@@ -454,11 +454,11 @@ export async function fetchOpenDealsInStage(stageId: number): Promise<StageDeal[
   let   start = 0
   const limit = 500
 
-  for (let page = 0; page < 20; page++) {
+  for (let page = 0; page < 5; page++) { // max 2500 deals per stage
     const url =
       `${BASE_URL}/deals?pipeline_id=7&stage_id=${stageId}&status=open&start=${start}&limit=${limit}&api_token=${API_TOKEN}`
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(10_000), cache: 'no-store' })
+      const res = await fetch(url, { signal: AbortSignal.timeout(8_000), cache: 'no-store' })
       if (!res.ok) break
       const json = await res.json()
       if (!json.success || !Array.isArray(json.data) || json.data.length === 0) break

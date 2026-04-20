@@ -119,12 +119,15 @@ export async function GET(request: NextRequest) {
   const summary: string[] = []
 
   // Fetch all stages from Pipedrive in parallel
+  console.log('[cron] starting Pipedrive fetches', new Date().toISOString())
   const stageResults = await Promise.all(
     OVERDUE_RULES.map(async rule => {
       const categoryId = categoryMap.get(rule.categoryName)
       if (!categoryId) return { rule, categoryId: null, deals: [] }
       try {
+        const t0 = Date.now()
         const deals = await fetchOpenDealsInStage(rule.stageId)
+        console.log(`[cron] stage ${rule.stageId} fetched ${deals.length} deals in ${Date.now() - t0}ms`)
         return { rule, categoryId, deals }
       } catch (err) {
         console.error(`[cron] fetchOpenDealsInStage(${rule.stageId}) failed:`, err)
@@ -132,6 +135,7 @@ export async function GET(request: NextRequest) {
       }
     })
   )
+  console.log('[cron] Pipedrive fetches done', new Date().toISOString())
 
   for (const { rule, categoryId, deals } of stageResults) {
     if (!categoryId) {
