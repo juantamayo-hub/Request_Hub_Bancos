@@ -94,26 +94,6 @@ export async function GET(request: NextRequest) {
 
   const categoryMap = new Map(cats.map(c => [c.name, c.id as string]))
 
-  // Cache profile resolution (email → profile id)
-  const profileCache = new Map<string, string | null>()
-
-  async function resolveOwner(categoryId: string): Promise<string | null> {
-    // Advance the round-robin counter and get the next assignee email
-    const { data: email } = await admin.rpc('pick_next_assignee_email', { p_category_id: categoryId })
-    if (!email) return null
-
-    if (profileCache.has(email)) return profileCache.get(email) ?? null
-
-    const { data: profile } = await admin
-      .from('profiles')
-      .select('id')
-      .eq('email', email as string)
-      .maybeSingle()
-
-    const id = (profile?.id as string | undefined) ?? null
-    profileCache.set(email, id)
-    return id
-  }
 
   let totalCreated = 0
   const summary: string[] = []
@@ -171,60 +151,76 @@ export async function GET(request: NextRequest) {
 
     const existingDealIds = new Set((existingTickets ?? []).map(t => t.pipedrive_deal_id))
 
-    let created = 0
-    let skipped = 0
-
-    for (const deal of deals) {
+    // Deals that truly need a new ticket
+    const newDeals = deals.filter(deal => {
       const hours = hoursElapsed(deal[rule.timestampField])
-      if (hours < rule.thresholdHours) continue
-      if (rule.maxThresholdHours && hours > rule.maxThresholdHours) continue
+      if (hours < rule.thresholdHours) return false
+      if (rule.maxThresholdHours && hours > rule.maxThresholdHours) return false
+      return !existingDealIds.has(deal.id)
+    })
 
-      const dealId = deal.id
+    const skipped = overdueDealIds.length - newDeals.length
 
-      if (existingDealIds.has(dealId)) { skipped++; continue }
+    if (newDeals.length === 0) {
+      summary.push(`${rule.categoryName}: ${deals.length} deals en stage, 0 tickets creados, ${skipped} ya existían`)
+      continue
+    }
 
-      // Advance round-robin per deal so each ticket goes to the next person
-      const assigneeId = await resolveOwner(categoryId)
+    // Batch round-robin: single RPC returns one email per new deal
+    const { data: assigneeEmails } = await admin.rpc('pick_assignees_batch', {
+      p_category_id: categoryId,
+      p_count:       newDeals.length,
+    })
 
-      const bankName     = (deal[FIELD_BANK_NAME] as string | null)
+    // Batch resolve unique emails → profile ids
+    const emailList  = [...new Set((assigneeEmails as string[] | null) ?? [])]
+    const { data: profiles } = await admin
+      .from('profiles')
+      .select('id, email')
+      .in('email', emailList)
+    const emailToId = new Map((profiles ?? []).map(p => [p.email, p.id as string]))
+
+    const slaDeadline = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
+
+    // Build all rows, then bulk insert in one request
+    const rows = newDeals.map((deal, i) => {
+      const email      = (assigneeEmails as string[] | null)?.[i] ?? null
+      const assigneeId = email ? (emailToId.get(email) ?? null) : null
+      const dealId     = deal.id
+      const bankName   = (deal[FIELD_BANK_NAME] as string | null)
         ?? (deal.title as string | null)
         ?? `Deal #${dealId}`
-      const ownerName    = deal.owner_id?.name ?? 'Sin asignar'
-      const pipedriveUrl = `https://app.pipedrive.com/deal/${dealId}`
-      const timeStr      = formatDuration(hours)
-
+      const hours      = hoursElapsed(deal[rule.timestampField])
       const description = [
-        `Deal #${dealId} lleva ${timeStr} en stage ${rule.stageName}.`,
+        `Deal #${dealId} lleva ${formatDuration(hours)} en stage ${rule.stageName}.`,
         `Banco: ${bankName}`,
-        `Responsable en Pipedrive: ${ownerName}`,
-        `Ver deal: ${pipedriveUrl}`,
+        `Responsable en Pipedrive: ${deal.owner_id?.name ?? 'Sin asignar'}`,
+        `Ver deal: https://app.pipedrive.com/deal/${dealId}`,
         ``,
         `Ticket generado automáticamente por Request Hub Bancos.`,
       ].join('\n')
 
-      const slaDeadline = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
-
-      const { error: insertErr } = await admin.from('tickets').insert({
+      return {
         created_by:        null,
         assignee_id:       assigneeId,
         category_id:       categoryId,
         subject:           `[Auto] ${rule.categoryName} – Deal #${dealId} – ${bankName}`,
         description,
-        priority:          'high',
-        status:            'new',
+        priority:          'high' as const,
+        status:            'new' as const,
         sla_hours:         48,
         sla_deadline:      slaDeadline,
         bank_name:         bankName,
         pipedrive_deal_id: dealId,
-      })
-
-      if (insertErr) {
-        console.error(`[cron] insert error deal=${dealId} category=${rule.categoryName}:`, insertErr)
-      } else {
-        created++
       }
+    })
+
+    const { error: insertErr } = await admin.from('tickets').insert(rows)
+    if (insertErr) {
+      console.error(`[cron] bulk insert error category=${rule.categoryName}:`, insertErr)
     }
 
+    const created = insertErr ? 0 : newDeals.length
     totalCreated += created
     summary.push(
       `${rule.categoryName}: ${deals.length} deals en stage, ${created} tickets creados, ${skipped} ya existían`,

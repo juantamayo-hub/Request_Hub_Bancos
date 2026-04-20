@@ -93,3 +93,34 @@ UPDATE routing_rules SET assignee_emails = ARRAY[
 -- System categories (single assignee)
 UPDATE routing_rules SET assignee_emails = ARRAY['cecilia.parent@bayteca.com']
 WHERE category_id IN (SELECT id FROM categories WHERE is_system = TRUE);
+
+-- ── Batch round-robin picker (used by cron for bulk inserts) ──
+-- Returns an array of N emails advancing the counter atomically.
+CREATE OR REPLACE FUNCTION pick_assignees_batch(p_category_id UUID, p_count INTEGER)
+RETURNS TEXT[]
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_emails TEXT[];
+  v_start  INTEGER;
+  v_len    INTEGER;
+  v_result TEXT[] := '{}';
+BEGIN
+  UPDATE routing_rules
+  SET    round_robin_index = round_robin_index + p_count
+  WHERE  category_id = p_category_id
+  RETURNING assignee_emails, round_robin_index - p_count
+  INTO v_emails, v_start;
+
+  IF v_emails IS NULL OR array_length(v_emails, 1) IS NULL THEN
+    RETURN '{}';
+  END IF;
+
+  v_len := array_length(v_emails, 1);
+  FOR i IN 0..p_count - 1 LOOP
+    v_result := array_append(v_result, v_emails[((v_start + i) % v_len) + 1]);
+  END LOOP;
+  RETURN v_result;
+END;
+$$;
