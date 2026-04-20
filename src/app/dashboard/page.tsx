@@ -401,18 +401,6 @@ export default async function DashboardPage({
           </div>
         </div>
 
-        {/* ── Operations by Bank ───────────────────────────────── */}
-        <div className="bg-white border border-gray-100 rounded-xl p-5 mb-6">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
-            Operaciones por Banco
-          </p>
-          <p className="text-xs text-gray-400 mb-4">{fromLabel} – {toLabel}</p>
-          <OperationsBreakdown
-            rows={operationsByBank}
-            emptyMsg="Sin solicitudes en el periodo seleccionado"
-          />
-        </div>
-
         {/* ── Owner Workload ───────────────────────────────────── */}
         <div className="bg-white border border-gray-100 rounded-xl p-5 mb-6">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
@@ -422,6 +410,18 @@ export default async function DashboardPage({
           <OwnerWorkload
             rows={ownerWorkload}
             emptyMsg="Sin solicitudes asignadas en el periodo seleccionado"
+          />
+        </div>
+
+        {/* ── Operations by Bank ───────────────────────────────── */}
+        <div className="bg-white border border-gray-100 rounded-xl p-5 mb-6">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
+            Operaciones por Banco
+          </p>
+          <p className="text-xs text-gray-400 mb-4">{fromLabel} – {toLabel}</p>
+          <OperationsBreakdown
+            rows={operationsByBank}
+            emptyMsg="Sin solicitudes en el periodo seleccionado"
           />
         </div>
 
