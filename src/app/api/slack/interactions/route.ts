@@ -205,6 +205,29 @@ export async function POST(request: NextRequest) {
       { onConflict: 'ticket_id' },
     )
 
+    // Also post a comment on the ticket thread
+    if (meta.requesterEmail) {
+      const { data: authorProfile } = await admin
+        .from('profiles')
+        .select('id')
+        .eq('email', meta.requesterEmail)
+        .single()
+
+      if (authorProfile) {
+        const emoji   = meta.satisfied ? '👍' : '👎'
+        const label   = meta.satisfied ? 'Satisfecho' : 'No satisfecho'
+        const body    = comment
+          ? `${emoji} Feedback: ${label}\n\n${comment}`
+          : `${emoji} Feedback: ${label}`
+        await admin.from('ticket_comments').insert({
+          ticket_id:  meta.ticketId,
+          author_id:  authorProfile.id,
+          body,
+          visibility: 'public',
+        })
+      }
+    }
+
     // Update the original Slack message to remove buttons and confirm receipt
     if (meta.response_url) {
       const sentimentLabel = meta.satisfied ? '👍 Satisfied' : '👎 Not satisfied'
