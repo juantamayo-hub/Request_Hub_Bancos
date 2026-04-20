@@ -94,28 +94,24 @@ export async function GET(request: NextRequest) {
 
   const categoryMap = new Map(cats.map(c => [c.name, c.id as string]))
 
-  // Cache owner profile resolution (email → profile id)
-  const ownerCache = new Map<string, string | null>()
+  // Cache profile resolution (email → profile id)
+  const profileCache = new Map<string, string | null>()
 
   async function resolveOwner(categoryId: string): Promise<string | null> {
-    const { data: rule } = await admin
-      .from('routing_rules')
-      .select('owner_email')
-      .eq('category_id', categoryId)
-      .maybeSingle()
-
-    const email = rule?.owner_email
+    // Advance the round-robin counter and get the next assignee email
+    const { data: email } = await admin.rpc('pick_next_assignee_email', { p_category_id: categoryId })
     if (!email) return null
-    if (ownerCache.has(email)) return ownerCache.get(email) ?? null
+
+    if (profileCache.has(email)) return profileCache.get(email) ?? null
 
     const { data: profile } = await admin
       .from('profiles')
       .select('id')
-      .eq('email', email)
+      .eq('email', email as string)
       .maybeSingle()
 
     const id = (profile?.id as string | undefined) ?? null
-    ownerCache.set(email, id)
+    profileCache.set(email, id)
     return id
   }
 
@@ -171,7 +167,6 @@ export async function GET(request: NextRequest) {
 
     const existingDealIds = new Set((existingTickets ?? []).map(t => t.pipedrive_deal_id))
 
-    const assigneeId = await resolveOwner(categoryId)
     let created = 0
     let skipped = 0
 
@@ -183,6 +178,9 @@ export async function GET(request: NextRequest) {
       const dealId = deal.id
 
       if (existingDealIds.has(dealId)) { skipped++; continue }
+
+      // Advance round-robin per deal so each ticket goes to the next person
+      const assigneeId = await resolveOwner(categoryId)
 
       const bankName     = (deal[FIELD_BANK_NAME] as string | null)
         ?? (deal.title as string | null)

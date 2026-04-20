@@ -64,14 +64,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Error de configuración del servidor' }, { status: 500 })
   }
 
-  // ─── Owner assignment from routing_rules ─────────────────────
-  const { data: rule } = await admin
-    .from('routing_rules')
-    .select('*, categories(id, name)')
-    .eq('category_id', category_id)
-    .single()
-
-  const assigneeEmail = rule?.owner_email ?? null
+  // ─── Owner assignment from routing_rules (round-robin) ───────
+  const [{ data: rule }, { data: assigneeEmail }] = await Promise.all([
+    admin
+      .from('routing_rules')
+      .select('sla_hours, default_priority, categories(id, name)')
+      .eq('category_id', category_id)
+      .single(),
+    admin.rpc('pick_next_assignee_email', { p_category_id: category_id }),
+  ])
 
   // ─── Resolve assignee email → profile id ──────────────────────
   let assigneeId: string | null = null
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
     const { data: assignee } = await admin
       .from('profiles')
       .select('id')
-      .eq('email', assigneeEmail)
+      .eq('email', assigneeEmail as string)
       .single()
     assigneeId = assignee?.id ?? null
   }
