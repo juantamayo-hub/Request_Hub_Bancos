@@ -16,6 +16,7 @@ import { PipedriveMetricsSection } from '@/components/dashboard/PipedriveMetrics
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters'
 import { DashboardTabSwitcher } from '@/components/dashboard/DashboardTabSwitcher'
 import { NegocioView } from '@/components/dashboard/NegocioView'
+import { OwnerWorkload } from '@/components/dashboard/OwnerWorkload'
 import type { DashboardMetrics, AtRiskTicket, TicketPriority } from '@/lib/database.types'
 
 export const metadata: Metadata = { title: 'Dashboard' }
@@ -146,27 +147,34 @@ export default async function DashboardPage({
   // ── Operations data (filtered by date range + optional bank/category) ──
   let opsQuery = supabase
     .from('tickets')
-    .select('category_id, bank_name, status, priority, created_at')
+    .select('category_id, bank_name, status, priority, created_at, assignee_id')
     .gte('created_at', fromISO)
     .lte('created_at', toISO)
 
   if (params.bank)     opsQuery = opsQuery.eq('bank_name',   params.bank)
   if (params.category) opsQuery = opsQuery.eq('category_id', params.category)
 
-  const [opsResult, categoriesResult, allBanksResult] = await Promise.all([
+  const [opsResult, categoriesResult, allBanksResult, assigneeProfilesResult] = await Promise.all([
     opsQuery,
     supabase.from('categories').select('id, name').eq('is_active', true).order('name'),
     supabase.from('tickets').select('bank_name').not('bank_name', 'is', null),
+    supabase.from('profiles').select('id, email, first_name, last_name').eq('role', 'admin'),
   ])
 
   const opsTickets  = opsResult.data ?? []
   const categories  = categoriesResult.data ?? []
   const categoryMap = Object.fromEntries(categories.map(c => [c.id, c.name]))
 
+  const assigneeProfiles = assigneeProfilesResult.data ?? []
+  const profileMap       = Object.fromEntries(
+    assigneeProfiles.map(p => [p.id, p.first_name ? `${p.first_name} ${p.last_name ?? ''}`.trim() : p.email])
+  )
+
   // ── Derive: operations by category ──────────────────────────
   const catOps: Record<string, { open: number; closed: number }> = {}
   const bankOps: Record<string, { open: number; closed: number }> = {}
   const bankCatOps: Record<string, Record<string, { open: number; closed: number }>> = {}
+  const ownerStats: Record<string, { name: string; new: number; in_progress: number; waiting: number; resolved_closed: number }> = {}
   const priorityCounts: Record<TicketPriority, number> = { low: 0, medium: 0, high: 0 }
   const ageBuckets = { '1-3d': 0, '3-7d': 0, '7d+': 0 }
 
@@ -195,7 +203,20 @@ export default async function DashboardPage({
       bankOps[bankName].closed++
       bankCatOps[bankName][catName].closed++
     }
+
+    // Owner workload
+    const aid = (t as typeof t & { assignee_id?: string | null }).assignee_id
+    if (aid && profileMap[aid]) {
+      if (!ownerStats[aid]) ownerStats[aid] = { name: profileMap[aid], new: 0, in_progress: 0, waiting: 0, resolved_closed: 0 }
+      const s = t.status
+      if      (s === 'new')                   ownerStats[aid].new++
+      else if (s === 'in_progress')            ownerStats[aid].in_progress++
+      else if (s === 'waiting_on_employee')    ownerStats[aid].waiting++
+      else                                     ownerStats[aid].resolved_closed++
+    }
   }
+
+  const ownerWorkload = Object.values(ownerStats)
 
   const operationsByCategory = Object.entries(catOps).map(([name, v]) => ({ name, ...v }))
   const operationsByBank     = Object.entries(bankOps).map(([name, v]) => ({
@@ -389,6 +410,18 @@ export default async function DashboardPage({
           <OperationsBreakdown
             rows={operationsByBank}
             emptyMsg="Sin solicitudes en el periodo seleccionado"
+          />
+        </div>
+
+        {/* ── Owner Workload ───────────────────────────────────── */}
+        <div className="bg-white border border-gray-100 rounded-xl p-5 mb-6">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
+            Carga por Responsable
+          </p>
+          <p className="text-xs text-gray-400 mb-4">{fromLabel} – {toLabel}</p>
+          <OwnerWorkload
+            rows={ownerWorkload}
+            emptyMsg="Sin solicitudes asignadas en el periodo seleccionado"
           />
         </div>
 
