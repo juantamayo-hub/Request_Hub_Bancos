@@ -73,18 +73,8 @@ function formatDuration(hours: number): string {
 export async function GET(request: NextRequest) {
   // Verify Vercel Cron secret (set CRON_SECRET in Vercel env vars)
   const auth = request.headers.get('authorization')
-  const envSecret = process.env.CRON_SECRET
-  if (!envSecret || auth !== `Bearer ${envSecret}`) {
-    return NextResponse.json({
-      error: 'Unauthorized',
-      debug: {
-        envSecretSet: !!envSecret,
-        envSecretLen: envSecret?.length ?? 0,
-        envSecretStart: envSecret?.slice(0, 6) ?? 'N/A',
-        receivedAuthLen: auth?.length ?? 0,
-        receivedAuthStart: auth?.slice(0, 13) ?? 'N/A',
-      },
-    }, { status: 401 })
+  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const admin = createAdminClient()
