@@ -261,7 +261,7 @@ export async function GET(request: NextRequest) {
     await Promise.all(
       Array.from(assigneeSummaries.entries()).map(([email, cats]) => {
         const total = cats.reduce((s, c) => s + c.count, 0)
-        return postSlackDM(email, buildCronSummaryMessage({ timeLabel, appUrl, categories: cats, total }))
+        return postSlackDM(email, buildCronSummaryMessage({ timeLabel, appUrl, categories: cats.map(c => ({ name: c.categoryName, count: c.count })), total }))
       }),
     )
   }
