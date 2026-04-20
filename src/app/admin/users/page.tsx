@@ -14,6 +14,7 @@ export type CategoryWithRule = {
     id:                 string
     owner_email:        string
     backup_owner_email: string | null
+    assignee_emails:    string[] | null
     sla_hours:          number
     default_priority:   string
   }[]
@@ -30,7 +31,7 @@ export default async function UsersPage() {
       .order('first_name', { ascending: true }),
     admin
       .from('categories')
-      .select('id, name, routing_rules(id, owner_email, backup_owner_email, sla_hours, default_priority)')
+      .select('id, name, routing_rules(id, owner_email, backup_owner_email, assignee_emails, sla_hours, default_priority)')
       .eq('is_active', true)
       .order('name'),
   ])

@@ -36,7 +36,7 @@ export function TicketCard({ ticket: t, isAdmin = false }: Props) {
 
           {isAdmin && (
             <p className="text-xs text-gray-400 mt-0.5 truncate">
-              {t.profiles.email}
+              {t.profiles?.email ?? 'Sistema'}
             </p>
           )}
         </div>

@@ -40,13 +40,13 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  let body: { category_id: string; owner_email: string; backup_owner_email?: string | null }
+  let body: { category_id: string; assignee_emails: string[]; owner_email?: string }
   try { body = await request.json() } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  if (!body.category_id || !body.owner_email?.trim()) {
-    return NextResponse.json({ error: 'category_id y owner_email son obligatorios' }, { status: 400 })
+  if (!body.category_id || !Array.isArray(body.assignee_emails) || body.assignee_emails.length === 0) {
+    return NextResponse.json({ error: 'category_id y assignee_emails son obligatorios' }, { status: 400 })
   }
 
   const admin = createAdminClient()
@@ -54,9 +54,9 @@ export async function PATCH(request: NextRequest) {
     .from('routing_rules')
     .upsert(
       {
-        category_id:        body.category_id,
-        owner_email:        body.owner_email.trim(),
-        backup_owner_email: body.backup_owner_email?.trim() || null,
+        category_id:     body.category_id,
+        assignee_emails: body.assignee_emails,
+        owner_email:     body.assignee_emails[0], // keep for backwards compat
       },
       { onConflict: 'category_id' },
     )

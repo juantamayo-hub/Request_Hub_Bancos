@@ -296,54 +296,52 @@ interface OwnershipSectionProps {
   admins:     Profile[]
 }
 
-type RowState = { owner_email: string; backup_owner_email: string }
-
 function OwnershipSection({ categories, admins }: OwnershipSectionProps) {
   const router = useRouter()
 
-  // Per-row state keyed by category id
-  const [rows, setRows] = useState<Record<string, RowState>>(() => {
-    const init: Record<string, RowState> = {}
+  // Per-row state: ordered list of assignee emails (round-robin order)
+  const [rows, setRows] = useState<Record<string, string[]>>(() => {
+    const init: Record<string, string[]> = {}
     for (const cat of categories) {
       const rule = Array.isArray(cat.routing_rules)
         ? cat.routing_rules[0] ?? null
         : cat.routing_rules
-      init[cat.id] = {
-        owner_email:        rule?.owner_email        ?? '',
-        backup_owner_email: rule?.backup_owner_email ?? '',
-      }
+      // Use assignee_emails if available, fall back to owner_email
+      const emails = rule?.assignee_emails?.length
+        ? rule.assignee_emails
+        : rule?.owner_email ? [rule.owner_email] : []
+      init[cat.id] = emails
     }
     return init
   })
 
   const [savingId, setSavingId] = useState<string | null>(null)
 
-  const adminOptions = [
-    { value: '', label: 'Sin asignar' },
-    ...admins.map(a => ({ value: a.email, label: `${displayName(a)} (${a.email})` })),
-  ]
-
-  function setRow(catId: string, patch: Partial<RowState>) {
-    setRows(prev => ({ ...prev, [catId]: { ...prev[catId], ...patch } }))
+  function addEmail(catId: string, email: string) {
+    setRows(prev => ({ ...prev, [catId]: [...(prev[catId] ?? []), email] }))
   }
 
-  function isDirty(cat: CategoryWithRule) {
+  function removeEmail(catId: string, email: string) {
+    setRows(prev => ({ ...prev, [catId]: (prev[catId] ?? []).filter(e => e !== email) }))
+  }
+
+  function savedEmails(cat: CategoryWithRule): string[] {
     const rule = Array.isArray(cat.routing_rules)
       ? cat.routing_rules[0] ?? null
       : cat.routing_rules
-    const saved: RowState = {
-      owner_email:        rule?.owner_email        ?? '',
-      backup_owner_email: rule?.backup_owner_email ?? '',
-    }
-    const current = rows[cat.id]
-    return current.owner_email !== saved.owner_email ||
-           current.backup_owner_email !== saved.backup_owner_email
+    return rule?.assignee_emails?.length
+      ? rule.assignee_emails
+      : rule?.owner_email ? [rule.owner_email] : []
+  }
+
+  function isDirty(cat: CategoryWithRule) {
+    return JSON.stringify(rows[cat.id] ?? []) !== JSON.stringify(savedEmails(cat))
   }
 
   async function handleSave(cat: CategoryWithRule) {
-    const row = rows[cat.id]
-    if (!row.owner_email) {
-      toast.error('Selecciona un responsable principal')
+    const emails = rows[cat.id] ?? []
+    if (emails.length === 0) {
+      toast.error('Añade al menos un responsable')
       return
     }
     setSavingId(cat.id)
@@ -351,16 +349,12 @@ function OwnershipSection({ categories, admins }: OwnershipSectionProps) {
       const res = await fetch('/api/admin/ownership', {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          category_id:        cat.id,
-          owner_email:        row.owner_email,
-          backup_owner_email: row.backup_owner_email || null,
-        }),
+        body:    JSON.stringify({ category_id: cat.id, assignee_emails: emails }),
         credentials: 'include',
       })
       const data = await res.json() as { error?: string }
       if (!res.ok) { toast.error(data.error ?? 'Error al guardar'); return }
-      toast.success(`Responsable de "${cat.name}" actualizado`)
+      toast.success(`Responsables de "${cat.name}" actualizados`)
       router.refresh()
     } catch {
       toast.error('Error de conexión')
@@ -379,35 +373,63 @@ function OwnershipSection({ categories, admins }: OwnershipSectionProps) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">Categoría</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">Responsable principal</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">Responsable de respaldo</th>
-                <th className="py-3 px-4" />
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide w-52">Categoría</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Responsables <span className="normal-case font-normal text-gray-400">(round-robin en orden)</span>
+                </th>
+                <th className="py-3 px-4 w-24" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {categories.map(cat => {
-                const row     = rows[cat.id]
+                const emails  = rows[cat.id] ?? []
                 const saving  = savingId === cat.id
                 const dirty   = isDirty(cat)
+                const available = admins.filter(a => !emails.includes(a.email))
                 return (
                   <tr key={cat.id} className="hover:bg-gray-50/50">
-                    <td className="py-3 px-4 font-medium text-gray-900 whitespace-nowrap">{cat.name}</td>
-                    <td className="py-3 px-4 min-w-[240px]">
-                      <Select
-                        options={adminOptions}
-                        value={row.owner_email}
-                        onChange={e => setRow(cat.id, { owner_email: e.target.value })}
-                      />
+                    <td className="py-3 px-4 font-medium text-gray-900 align-top whitespace-nowrap">{cat.name}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        {emails.map((email, i) => {
+                          const p     = admins.find(a => a.email === email)
+                          const label = p ? displayName(p) : email
+                          return (
+                            <span
+                              key={email}
+                              className="inline-flex items-center gap-1 bg-[#E8F2EC] text-[#083D20] text-xs font-medium px-2.5 py-1 rounded-full"
+                            >
+                              <span className="text-[#083D20]/40 text-[10px]">{i + 1}.</span>
+                              {label}
+                              <button
+                                type="button"
+                                onClick={() => removeEmail(cat.id, email)}
+                                className="ml-0.5 text-[#083D20]/50 hover:text-[#083D20] font-bold leading-none"
+                                aria-label={`Eliminar ${label}`}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          )
+                        })}
+                        {available.length > 0 && (
+                          <select
+                            className="text-xs border border-dashed border-gray-300 rounded-full px-2.5 py-1 bg-transparent text-gray-400 cursor-pointer hover:border-gray-400 hover:text-gray-600 focus:outline-none"
+                            value=""
+                            onChange={e => { if (e.target.value) addEmail(cat.id, e.target.value) }}
+                          >
+                            <option value="">+ Añadir</option>
+                            {available.map(a => (
+                              <option key={a.id} value={a.email}>{displayName(a)}</option>
+                            ))}
+                          </select>
+                        )}
+                        {emails.length === 0 && (
+                          <span className="text-xs text-gray-400 italic">Sin responsables</span>
+                        )}
+                      </div>
                     </td>
-                    <td className="py-3 px-4 min-w-[240px]">
-                      <Select
-                        options={adminOptions}
-                        value={row.backup_owner_email}
-                        onChange={e => setRow(cat.id, { backup_owner_email: e.target.value })}
-                      />
-                    </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-3 px-4 text-right align-top">
                       <Button
                         onClick={() => handleSave(cat)}
                         isLoading={saving}
