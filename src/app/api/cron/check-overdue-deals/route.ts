@@ -21,20 +21,22 @@ const FIELD_BANK_NAME = 'c3a445b9bf0422b9db09abc776cf2dc281b7e975'
 // ── Overdue rules ─────────────────────────────────────────────
 
 interface OverdueRule {
-  stageId:        number
-  categoryName:   string
-  timestampField: string
-  thresholdHours: number
-  stageName:      string
+  stageId:          number
+  categoryName:     string
+  timestampField:   string
+  thresholdHours:   number
+  maxThresholdHours?: number
+  stageName:        string
 }
 
 const OVERDUE_RULES: OverdueRule[] = [
   {
-    stageId:        70,
-    categoryName:   'Bank Submission Overdue',
-    timestampField: FIELD_BANK_SUBMISSION_TS,
-    thresholdHours: 48,
-    stageName:      'Bank Submission',
+    stageId:          70,
+    categoryName:     'Bank Submission Overdue',
+    timestampField:   FIELD_BANK_SUBMISSION_TS,
+    thresholdHours:   48,
+    maxThresholdHours: 360, // 15 days — ignore if deal has been stuck too long
+    stageName:        'Bank Submission',
   },
   {
     stageId:        72,
@@ -142,6 +144,7 @@ export async function GET(request: NextRequest) {
     for (const deal of deals) {
       const hours = hoursElapsed(deal[rule.timestampField])
       if (hours < rule.thresholdHours) continue
+      if (rule.maxThresholdHours && hours > rule.maxThresholdHours) continue
 
       const dealId   = deal.id
       const bankName = (deal[FIELD_BANK_NAME] as string | null)
