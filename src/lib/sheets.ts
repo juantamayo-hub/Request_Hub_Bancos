@@ -37,6 +37,14 @@ async function getSheetsClient() {
   return google.sheets({ version: 'v4', auth })
 }
 
+// ── List available sheets ─────────────────────────────────────
+
+export async function listSheetNames(): Promise<string[]> {
+  const sheets   = await getSheetsClient()
+  const response = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID })
+  return (response.data.sheets ?? []).map(s => s.properties?.title ?? '')
+}
+
 // ── Generic range reader ──────────────────────────────────────
 
 export async function readRange(range: string): Promise<(string | number | null)[][]> {
@@ -48,6 +56,19 @@ export async function readRange(range: string): Promise<(string | number | null)
   return (response.data.values ?? []) as (string | number | null)[][]
 }
 
+// ── Sheet name resolver ───────────────────────────────────────
+
+/** Finds the actual sheet name by partial/fuzzy match (case-insensitive) */
+function findSheet(names: string[], ...keywords: string[]): string | null {
+  const lower = keywords.map(k => k.toLowerCase())
+  return names.find(n => lower.every(k => n.toLowerCase().includes(k))) ?? null
+}
+
+function quoteSheet(name: string): string {
+  // Escape single quotes by doubling them, then wrap in single quotes
+  return `'${name.replace(/'/g, "''")}'`
+}
+
 // ── Structured data fetchers ──────────────────────────────────
 
 export interface LostReasonCount {
@@ -56,12 +77,15 @@ export interface LostReasonCount {
 }
 
 /**
- * Reads lost reasons from "RAW DATA Bank Area Conversions," tab, column O.
- * Returns top reasons sorted by count desc, ignoring nulls/blanks.
+ * Reads lost reasons from the RAW DATA tab, column O (lost reason field).
  */
-export async function fetchLostReasons(): Promise<LostReasonCount[]> {
-  // Column O = lost reason. Skip header row (row 2 is header in this sheet).
-  const rows = await readRange("'RAW DATA Bank Area Conversions,'!O3:O")
+export async function fetchLostReasons(sheetNames: string[]): Promise<LostReasonCount[]> {
+  const sheet = findSheet(sheetNames, 'raw data', 'bank area')
+  if (!sheet) {
+    console.warn('[sheets] RAW DATA sheet not found. Available:', sheetNames)
+    return []
+  }
+  const rows = await readRange(`${quoteSheet(sheet)}!O3:O`)
 
   const counts = new Map<string, number>()
   for (const row of rows) {
@@ -83,12 +107,15 @@ export interface VolumeByBank {
 }
 
 /**
- * Reads volume by bank from "Main huge calculations per Main" tab.
- * Returns yearly totals for FEIN volume per bank.
- * Row structure: (Area, MetricType, Metric, BankName, 2025_total, Q1, Jan, ...)
+ * Reads volume by bank from the "Main huge calculations" tab.
  */
-export async function fetchVolumeByBank(year: number): Promise<VolumeByBank[]> {
-  const rows = await readRange("'Main huge calculations per Main'!A:AK")
+export async function fetchVolumeByBank(year: number, sheetNames: string[]): Promise<VolumeByBank[]> {
+  const sheet = findSheet(sheetNames, 'main', 'calculations')
+  if (!sheet) {
+    console.warn('[sheets] Main calculations sheet not found. Available:', sheetNames)
+    return []
+  }
+  const rows = await readRange(`${quoteSheet(sheet)}!A:AK`)
   if (rows.length < 2) return []
 
   // Find year column index from header row (row 0)
@@ -129,16 +156,15 @@ export interface ConversionByBank {
 }
 
 /**
- * Reads BoR→Won conversion rates by bank from the "Calculations" tab.
- * Extracts the most recent month's rates per bank.
+ * Reads BoR→VAL conversion rates by bank from the "Calculations" tab.
  */
-export async function fetchConversionsByBank(): Promise<ConversionByBank[]> {
-  // The Calculations sheet is very wide — read only the first section (BoR conversions)
-  // Row 4 (index 3) has headers: BoR month, Bank Name, ..., M0, M1, M2, M3, M4, M4+, Total conversions
-  // We look for the "Total conversions" column for BoR→VAL, VAL→FEIN, FEIN→Won
-
-  // Read a manageable section
-  const rows = await readRange("'Calculations'!A4:BK")
+export async function fetchConversionsByBank(sheetNames: string[]): Promise<ConversionByBank[]> {
+  const sheet = findSheet(sheetNames, 'calculation')
+  if (!sheet) {
+    console.warn('[sheets] Calculations sheet not found. Available:', sheetNames)
+    return []
+  }
+  const rows = await readRange(`${quoteSheet(sheet)}!A4:BK`)
   if (rows.length < 2) return []
 
   const result = new Map<string, ConversionByBank>()

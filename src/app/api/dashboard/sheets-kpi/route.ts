@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import {
   isConfigured,
+  listSheetNames,
   fetchLostReasons,
   fetchVolumeByBank,
   fetchConversionsByBank,
@@ -29,22 +30,36 @@ export async function GET(request: NextRequest) {
 
   const year = parseInt(request.nextUrl.searchParams.get('year') ?? String(new Date().getFullYear()), 10)
 
+  // Always fetch sheet names first — helps debug range errors
+  let sheetNames: string[] = []
+  try {
+    sheetNames = await listSheetNames()
+  } catch (err) {
+    console.error('[sheets-kpi] listSheetNames failed:', err)
+    return NextResponse.json({ error: 'Error al conectar con Google Sheets', detail: String(err) }, { status: 500 })
+  }
+
   try {
     const [lostReasons, volumeByBank, conversionsByBank] = await Promise.all([
-      fetchLostReasons(),
-      fetchVolumeByBank(year),
-      fetchConversionsByBank(),
+      fetchLostReasons(sheetNames),
+      fetchVolumeByBank(year, sheetNames),
+      fetchConversionsByBank(sheetNames),
     ])
 
     return NextResponse.json({
       configured: true,
       year,
+      sheetNames,
       lostReasons,
       volumeByBank,
       conversionsByBank,
     })
   } catch (err) {
     console.error('[sheets-kpi] fetch failed:', err)
-    return NextResponse.json({ error: 'Error al leer Google Sheets', detail: String(err) }, { status: 500 })
+    return NextResponse.json({
+      error:      'Error al leer Google Sheets',
+      detail:     String(err),
+      sheetNames,           // include so we can debug which names are available
+    }, { status: 500 })
   }
 }
