@@ -206,7 +206,7 @@ export async function GET(request: NextRequest) {
       const description = [
         `Deal #${dealId} lleva ${formatDuration(hours)} en stage ${rule.stageName}.`,
         `Banco: ${bankName}`,
-        `Responsable en Pipedrive: ${deal.owner_id?.name ?? 'Sin asignar'}`,
+        `Responsable en Pipedrive: ${(deal.user_id as { name?: string } | null)?.name ?? 'Sin asignar'}`,
         `Ver deal: https://app.pipedrive.com/deal/${dealId}`,
         ``,
         `Ticket generado automáticamente por Request Hub Bancos.`,

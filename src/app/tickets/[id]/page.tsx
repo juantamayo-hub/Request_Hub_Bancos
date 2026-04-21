@@ -133,6 +133,19 @@ export default async function TicketDetailPage({ params }: Props) {
                   <p className="font-medium">{displayName(t.assignee)}</p>
                 </div>
               )}
+              {(t as typeof t & { pipedrive_deal_id?: number | null }).pipedrive_deal_id && (
+                <div>
+                  <p className="text-gray-500 mb-0.5">Deal Pipedrive</p>
+                  <a
+                    href={`https://app.pipedrive.com/deal/${(t as typeof t & { pipedrive_deal_id?: number | null }).pipedrive_deal_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-[#083D20] hover:underline"
+                  >
+                    #{(t as typeof t & { pipedrive_deal_id?: number | null }).pipedrive_deal_id} →
+                  </a>
+                </div>
+              )}
               {t.sla_deadline && (
                 <div>
                   <p className="text-gray-500 mb-0.5">Fecha límite SLA</p>
