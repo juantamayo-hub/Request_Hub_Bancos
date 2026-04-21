@@ -58,10 +58,15 @@ export async function readRange(range: string): Promise<(string | number | null)
 
 // ── Sheet name resolver ───────────────────────────────────────
 
-/** Finds the actual sheet name by partial/fuzzy match (case-insensitive) */
+/**
+ * Finds a sheet by keywords (all must match, case-insensitive).
+ * When multiple sheets match, returns the shortest name (most specific match).
+ */
 function findSheet(names: string[], ...keywords: string[]): string | null {
-  const lower = keywords.map(k => k.toLowerCase())
-  return names.find(n => lower.every(k => n.toLowerCase().includes(k))) ?? null
+  const lower   = keywords.map(k => k.toLowerCase())
+  const matches = names.filter(n => lower.every(k => n.toLowerCase().includes(k)))
+  if (matches.length === 0) return null
+  return matches.sort((a, b) => a.length - b.length)[0]
 }
 
 function quoteSheet(name: string): string {
@@ -110,7 +115,7 @@ export interface VolumeByBank {
  * Reads volume by bank from the "Main huge calculations" tab.
  */
 export async function fetchVolumeByBank(year: number, sheetNames: string[]): Promise<VolumeByBank[]> {
-  const sheet = findSheet(sheetNames, 'main', 'calculations')
+  const sheet = findSheet(sheetNames, 'main', 'banks')
   if (!sheet) {
     console.warn('[sheets] Main calculations sheet not found. Available:', sheetNames)
     return []
