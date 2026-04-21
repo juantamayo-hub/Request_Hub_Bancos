@@ -62,6 +62,7 @@ export interface Ticket {
   tags:         string[] | null
   bank_name:         string | null
   bank_email:        string | null
+  client_name:       string | null
   pipedrive_deal_id: number | null
   created_at:        string
   updated_at:   string
@@ -189,6 +190,7 @@ export interface CreateTicketInput {
   tags?:         string[]
   bank_name?:         string
   bank_email?:        string
+  client_name?:       string
   pipedrive_deal_id?: number
 }
 

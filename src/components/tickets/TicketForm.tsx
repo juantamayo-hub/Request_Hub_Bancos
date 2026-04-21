@@ -24,8 +24,9 @@ interface Props {
 }
 
 interface DealInfo {
-  bankName:  string
-  bankEmail: string
+  bankName:   string
+  bankEmail:  string
+  clientName: string | null
 }
 
 export function TicketForm({ categories }: Props) {
@@ -39,6 +40,7 @@ export function TicketForm({ categories }: Props) {
   const [dealError,   setDealError]   = useState<string | null>(null)
   const [bankName,    setBankName]    = useState('')
   const [bankEmail,   setBankEmail]   = useState('')
+  const [clientName,  setClientName]  = useState('')
   const [description, setDescription] = useState('')
 
   const dealDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -52,6 +54,7 @@ export function TicketForm({ categories }: Props) {
       setDealError(null)
       setBankName('')
       setBankEmail('')
+      setClientName('')
       return
     }
 
@@ -61,6 +64,7 @@ export function TicketForm({ categories }: Props) {
       setDealInfo(null)
       setBankName('')
       setBankEmail('')
+      setClientName('')
       return
     }
 
@@ -76,16 +80,19 @@ export function TicketForm({ categories }: Props) {
         setDealError(data.error ?? 'Deal no encontrado o no válido.')
         setBankName('')
         setBankEmail('')
+        setClientName('')
         return
       }
 
       const info: DealInfo = {
-        bankName:  data.bankName  ?? '',
-        bankEmail: data.bankEmail ?? '',
+        bankName:   data.bankName   ?? '',
+        bankEmail:  data.bankEmail  ?? '',
+        clientName: data.clientName ?? null,
       }
       setDealInfo(info)
       setBankName(info.bankName)
       setBankEmail(info.bankEmail)
+      setClientName(info.clientName ?? '')
     } catch {
       setDealError('Error de conexión al verificar el deal.')
     } finally {
@@ -149,6 +156,7 @@ export function TicketForm({ categories }: Props) {
           description:       description.trim(),
           bank_name:         bankName,
           bank_email:        bankEmail.trim() || undefined,
+          client_name:       clientName.trim() || undefined,
           pipedrive_deal_id: parseInt(dealId.trim(), 10),
         }),
         credentials: 'include',
@@ -208,9 +216,28 @@ export function TicketForm({ categories }: Props) {
         {dealInfo && !dealError && (
           <p className="mt-1 text-xs text-green-700">
             ✓ Deal verificado — {dealInfo.bankName || 'banco no especificado en Pipedrive'}
+            {dealInfo.clientName ? ` · ${dealInfo.clientName}` : ''}
           </p>
         )}
       </div>
+
+      {/* Nombre del cliente (auto-rellenado desde Pipedrive) */}
+      {dealInfo && (
+        <div>
+          <Label htmlFor="clientName">
+            Nombre del cliente{' '}
+            <span className="text-gray-400 font-normal text-xs">(obtenido del deal)</span>
+          </Label>
+          <Input
+            id="clientName"
+            type="text"
+            placeholder="Sin contacto asignado en Pipedrive"
+            value={clientName}
+            readOnly
+            className="mt-1 bg-gray-50 text-gray-500 cursor-not-allowed focus:ring-[#083D20] focus:border-[#083D20]"
+          />
+        </div>
+      )}
 
       {/* Categoría */}
       <div>

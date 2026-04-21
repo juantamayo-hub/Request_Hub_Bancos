@@ -28,6 +28,7 @@ export interface DealValidationResult {
   title:       string
   bankName:    string | null
   bankEmail:   string | null
+  clientName:  string | null
 }
 
 export interface PipelineRevenue {
@@ -64,13 +65,19 @@ export async function validateDeal(dealId: number): Promise<DealValidationResult
     )
   }
 
+  // person_id is an object like { value: 123, name: "John Doe" } or null
+  const personName = typeof deal.person_id === 'object' && deal.person_id !== null
+    ? (deal.person_id as { name?: string }).name ?? null
+    : null
+
   return {
     dealId,
     pipelineId,
     pipelineName: PIPELINE_NAMES[pipelineId] ?? `Pipeline ${pipelineId}`,
-    title:     deal.title ?? '',
-    bankName:  deal[FIELD_BANK_NAME]  ?? null,
-    bankEmail: deal[FIELD_BANK_EMAIL] ?? null,
+    title:      deal.title ?? '',
+    bankName:   deal[FIELD_BANK_NAME]  ?? null,
+    bankEmail:  deal[FIELD_BANK_EMAIL] ?? null,
+    clientName: personName,
   }
 }
 

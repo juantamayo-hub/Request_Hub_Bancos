@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 })
   }
 
-  const { category_id, subject, description, subcategory, priority, tags, bank_name, bank_email, pipedrive_deal_id } = body
+  const { category_id, subject, description, subcategory, priority, tags, bank_name, bank_email, client_name, pipedrive_deal_id } = body
 
 
   if (!category_id || !subject?.trim() || !description?.trim()) {
@@ -106,6 +106,7 @@ export async function POST(request: NextRequest) {
       tags:         tags ?? null,
       bank_name:         bank_name.trim(),
       bank_email:        bank_email?.trim() ?? null,
+      client_name:       client_name?.trim() ?? null,
       pipedrive_deal_id: pipedrive_deal_id ?? null,
     })
     .select('id, display_id, subject, status, priority')

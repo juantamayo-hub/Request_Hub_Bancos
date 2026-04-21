@@ -109,6 +109,12 @@ export default async function TicketDetailPage({ params }: Props) {
                 <p className="text-gray-500 mb-0.5">Última actualización</p>
                 <p className="font-medium">{formatDate(t.updated_at)}</p>
               </div>
+              {(t as typeof t & { client_name?: string | null }).client_name && (
+                <div>
+                  <p className="text-gray-500 mb-0.5">Cliente</p>
+                  <p className="font-medium">{(t as typeof t & { client_name?: string | null }).client_name}</p>
+                </div>
+              )}
               {(t as typeof t & { bank_name?: string | null }).bank_name && (
                 <div>
                   <p className="text-gray-500 mb-0.5">Banco</p>
