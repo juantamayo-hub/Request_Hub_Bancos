@@ -1,10 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSearchParams }    from 'next/navigation'
-import { NegocioFilters }     from './NegocioFilters'
-import { FunnelKPIStrip }     from './FunnelKPIStrip'
-import { FunnelWaterfall }    from './FunnelWaterfall'
+import { useSearchParams }       from 'next/navigation'
+import { NegocioFilters }        from './NegocioFilters'
+import { FunnelKPIStrip }        from './FunnelKPIStrip'
+import { FunnelWaterfall }       from './FunnelWaterfall'
+import { StageSnapshot }         from './StageSnapshot'
+import { MortgageVolumeCard }    from './MortgageVolumeCard'
+import { SheetsKPISection }      from './SheetsKPISection'
 
 // ── Types (mirrors API response) ──────────────────────────────
 
@@ -30,16 +33,40 @@ interface BaytecaRevenue {
   dealCount:  number
 }
 
+interface StageCount {
+  stageId:   number
+  label:     string
+  openCount: number
+  lostCount: number
+}
+
+interface MortgageVolumeByBank {
+  bankName: string
+  amount:   number
+  count:    number
+}
+
+interface MortgageSummary {
+  total:  number
+  count:  number
+  byBank: MortgageVolumeByBank[]
+}
+
 interface ApiData {
-  kpis:    FunnelKPI[]
-  funnel:  WaterfallStage[]
-  bsTotal: number
-  revenue: BaytecaRevenue
+  kpis:           FunnelKPI[]
+  ytdKpis:        FunnelKPI[]
+  ytdBsTotal:     number
+  funnel:         WaterfallStage[]
+  lostByStage:    Record<string, number>
+  bsTotal:        number
+  revenue:        BaytecaRevenue
+  stageCounts:    StageCount[]
+  mortgageVolume: MortgageSummary
 }
 
 // ── Session cache helpers ─────────────────────────────────────
 
-const CACHE_VERSION = 'v2'
+const CACHE_VERSION = 'v3'
 
 function cacheKey(year: number, months: number[]): string {
   return `negocio_${CACHE_VERSION}_${year}_${[...months].sort((a, b) => a - b).join(',')}`
@@ -176,7 +203,6 @@ export function NegocioView() {
   const currentMonth = now.getMonth() + 1
   const year         = now.getFullYear()
 
-  // Parse ?months=3,4 (multi) or legacy ?month=4 (single)
   const rawParam     = searchParams.get('months') ?? searchParams.get('month') ?? String(currentMonth)
   const parsedMonths = rawParam
     .split(',')
@@ -191,12 +217,11 @@ export function NegocioView() {
   const [cachedAt,   setCachedAt]   = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
 
-  const monthsKey = months.join(',')  // stable string for useEffect deps
+  const monthsKey = months.join(',')
 
   useEffect(() => {
     let cancelled = false
 
-    // Check session cache first
     const cached = loadCache(year, months)
     if (cached) {
       setData(cached.data)
@@ -267,6 +292,7 @@ export function NegocioView() {
 
       {!loading && data && (
         <>
+          {/* Revenue */}
           <div className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-6">
             <div className="px-6 pt-4 pb-0 border-b border-gray-50">
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 pb-3">
@@ -276,22 +302,57 @@ export function NegocioView() {
             <BaytecaRevenueCard revenue={data.revenue} dateRange={period} />
           </div>
 
+          {/* Conversion KPIs (with YTD comparison) */}
           <div className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-6">
             <div className="px-6 pt-4 pb-0 border-b border-gray-50">
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 pb-3">
                 Funnel de Conversión · Bayteca Bank Area
               </p>
             </div>
-            <FunnelKPIStrip kpis={data.kpis} bsTotal={data.bsTotal} period={period} />
+            <FunnelKPIStrip
+              kpis={data.kpis}
+              ytdKpis={data.ytdKpis}
+              bsTotal={data.bsTotal}
+              period={period}
+            />
           </div>
 
+          {/* Waterfall — BS cohort (with lost counts) */}
           <div className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-6">
             <div className="px-6 pt-4 pb-0 border-b border-gray-50">
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 pb-3">
                 Progresión del Funnel · BS Cohort
               </p>
             </div>
-            <FunnelWaterfall stages={data.funnel} />
+            <FunnelWaterfall stages={data.funnel} lostByStage={data.lostByStage} />
+          </div>
+
+          {/* Stage snapshot — current pipeline state */}
+          <div className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-6">
+            <div className="px-6 pt-4 pb-0 border-b border-gray-50">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 pb-3">
+                Pipeline Actual · Deals en cada Stage
+              </p>
+            </div>
+            <StageSnapshot stages={data.stageCounts} />
+          </div>
+
+          {/* Financed mortgage volume */}
+          <div className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-6">
+            <div className="px-6 pt-4 pb-0 border-b border-gray-50">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 pb-3">
+                Volumen de Hipotecas Financiadas · Won + Notary
+              </p>
+            </div>
+            <MortgageVolumeCard data={data.mortgageVolume} period={period} />
+          </div>
+
+          {/* Google Sheets KPI section */}
+          <div className="mb-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4 px-1">
+              KPIs · Google Sheets
+            </p>
+            <SheetsKPISection />
           </div>
         </>
       )}

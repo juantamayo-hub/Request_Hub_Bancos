@@ -138,9 +138,35 @@ export interface WaterfallStage {
 }
 
 export interface BaytecaMetrics {
-  bsTotal: number
-  kpis:    FunnelKPI[]
-  funnel:  WaterfallStage[]
+  bsTotal:     number
+  kpis:        FunnelKPI[]
+  funnel:      WaterfallStage[]
+  lostByStage: Record<string, number>   // stage label → lost count from BS cohort
+  ytdKpis:     FunnelKPI[]
+  ytdBsTotal:  number
+}
+
+// ─── Stage Snapshot ───────────────────────────────────────────
+
+export interface StageCount {
+  stageId:   number
+  label:     string
+  openCount: number
+  lostCount: number
+}
+
+// ─── Mortgage Volume ──────────────────────────────────────────
+
+export interface MortgageVolumeByBank {
+  bankName: string
+  amount:   number
+  count:    number
+}
+
+export interface MortgageSummary {
+  total:  number
+  count:  number
+  byBank: MortgageVolumeByBank[]
 }
 
 export interface FunnelConversionResult {
@@ -354,67 +380,40 @@ async function findBSYearFilter(year: number): Promise<number | null> {
   }
 }
 
-export async function fetchBaytecaMetrics(year: number, months: number[]): Promise<BaytecaMetrics> {
-  const minMonth = Math.min(...months)
-  const maxMonth = Math.max(...months)
-  const from     = new Date(year, minMonth - 1, 1)
-  const to       = new Date(year, maxMonth, 0, 23, 59, 59)
+// ─── Shared computation helper ────────────────────────────────
 
-  const [stageMap, filterId] = await Promise.all([
-    fetchStageOrderMap(),
-    findBSYearFilter(year),
-  ])
+const STAGE_ID_TO_LABEL: Record<number, string> = {
+  70: 'Bank Sub.',
+  71: 'Bank Offer',
+  72: 'Valuation',
+  73: 'FEIN',
+  75: 'Notary',
+}
 
-  // Use saved filter when available (returns only BS-month deals, ~14 pages
-  // instead of 38+). Fall back to full pipeline scan when no filter is found.
-  const allDeals = filterId
-    ? await fetchDealsByFilterId(filterId)
-    : await fetchAllPipelineDeals(from, to)
-
-  // ── Cohorts ────────────────────────────────────────────────
+function computeMetricsFromDeals(
+  allDeals:  RawFullDeal[],
+  year:      number,
+  months:    number[],
+  stageMap:  Map<number, number>,
+): { bsTotal: number; kpis: FunnelKPI[]; funnel: WaterfallStage[]; lostByStage: Record<string, number> } {
   const bsCohort = allDeals.filter(d => inMonthSet(d[FIELD_BS_MONTH],        year, months))
-  const borYtd   = allDeals.filter(d => inMonthSet(d[FIELD_BOR_MONTH],       year, months))
-  const valYtd   = allDeals.filter(d => inMonthSet(d[FIELD_VALUATION_MONTH], year, months))
-  const feinYtd  = allDeals.filter(d => inMonthSet(d[FIELD_FEIN_MONTH],      year, months))
+  const borCohort = allDeals.filter(d => inMonthSet(d[FIELD_BOR_MONTH],       year, months))
+  const valCohort = allDeals.filter(d => inMonthSet(d[FIELD_VALUATION_MONTH], year, months))
+  const feinCohort = allDeals.filter(d => inMonthSet(d[FIELD_FEIN_MONTH],     year, months))
 
   const notaryStageOrder = stageMap.get(75) ?? -1
-  const hasField = (d: RawFullDeal, field: string) =>
-    d[field] != null && typeof d[field] === 'string'
+  const hasField     = (d: RawFullDeal, field: string) => d[field] != null && typeof d[field] === 'string'
   const reachedNotary = (d: RawFullDeal) =>
     notaryStageOrder >= 0 && (d.stage_order_nr ?? -1) >= notaryStageOrder
 
   const bsTotal = bsCohort.length
 
-  // ── 4 KPIs (each uses its own cohort as denominator) ──────
+  // ── 4 KPIs ────────────────────────────────────────────────
   const kpis: FunnelKPI[] = [
-    {
-      fromLabel: 'Bank Submission',
-      toLabel:   'Bank Offer',
-      cohort:    bsTotal,
-      count:     bsCohort.filter(d => hasField(d, FIELD_BOR_MONTH)).length,
-      rate:      0,
-    },
-    {
-      fromLabel: 'Bank Offer',
-      toLabel:   'Valuation',
-      cohort:    borYtd.length,
-      count:     borYtd.filter(d => hasField(d, FIELD_VALUATION_MONTH)).length,
-      rate:      0,
-    },
-    {
-      fromLabel: 'Valuation',
-      toLabel:   'FEIN',
-      cohort:    valYtd.length,
-      count:     valYtd.filter(d => hasField(d, FIELD_FEIN_MONTH)).length,
-      rate:      0,
-    },
-    {
-      fromLabel: 'FEIN',
-      toLabel:   'Notary',
-      cohort:    feinYtd.length,
-      count:     feinYtd.filter(reachedNotary).length,
-      rate:      0,
-    },
+    { fromLabel: 'Bank Submission', toLabel: 'Bank Offer',  cohort: bsTotal,           count: bsCohort.filter(d => hasField(d, FIELD_BOR_MONTH)).length,          rate: 0 },
+    { fromLabel: 'Bank Offer',      toLabel: 'Valuation',   cohort: borCohort.length,  count: borCohort.filter(d => hasField(d, FIELD_VALUATION_MONTH)).length,   rate: 0 },
+    { fromLabel: 'Valuation',       toLabel: 'FEIN',        cohort: valCohort.length,  count: valCohort.filter(d => hasField(d, FIELD_FEIN_MONTH)).length,        rate: 0 },
+    { fromLabel: 'FEIN',            toLabel: 'Notary',      cohort: feinCohort.length, count: feinCohort.filter(reachedNotary).length,                            rate: 0 },
   ]
   for (const kpi of kpis) {
     kpi.rate = kpi.cohort === 0 ? 0 : Math.round((kpi.count / kpi.cohort) * 100)
@@ -439,7 +438,139 @@ export async function fetchBaytecaMetrics(year: number, months: number[]): Promi
       : Math.round((count / waterfallCounts[i - 1]) * 100),
   }))
 
-  return { bsTotal, kpis, funnel }
+  // ── Lost by stage from BS cohort ───────────────────────────
+  const lostByStage: Record<string, number> = {}
+  for (const deal of bsCohort) {
+    if (String(deal.status) === 'lost') {
+      const label = STAGE_ID_TO_LABEL[deal.stage_id as number] ?? `Stage ${deal.stage_id}`
+      lostByStage[label] = (lostByStage[label] ?? 0) + 1
+    }
+  }
+
+  return { bsTotal, kpis, funnel, lostByStage }
+}
+
+export async function fetchBaytecaMetrics(year: number, months: number[]): Promise<BaytecaMetrics> {
+  const currentMonth = new Date().getMonth() + 1
+  const ytdMonths    = Array.from({ length: currentMonth }, (_, i) => i + 1)
+
+  // Always fetch from Jan 1 so we have full-year data for the YTD comparison
+  const from = new Date(year, 0, 1)
+  const to   = new Date(year, 11, 31, 23, 59, 59)
+
+  const [stageMap, filterId] = await Promise.all([
+    fetchStageOrderMap(),
+    findBSYearFilter(year),
+  ])
+
+  const allDeals = filterId
+    ? await fetchDealsByFilterId(filterId)
+    : await fetchAllPipelineDeals(from, to)
+
+  // Compute metrics for the selected period
+  const selected = computeMetricsFromDeals(allDeals, year, months, stageMap)
+
+  // Compute YTD (same calculation, different month set) — reuses same deals array
+  const selSorted = [...months].sort((a, b) => a - b)
+  const ytdSorted = [...ytdMonths].sort((a, b) => a - b)
+  const isYtd = selSorted.length === ytdSorted.length && selSorted.every((m, i) => m === ytdSorted[i])
+  const ytd   = isYtd ? selected : computeMetricsFromDeals(allDeals, year, ytdMonths, stageMap)
+
+  return {
+    bsTotal:     selected.bsTotal,
+    kpis:        selected.kpis,
+    funnel:      selected.funnel,
+    lostByStage: selected.lostByStage,
+    ytdKpis:     ytd.kpis,
+    ytdBsTotal:  ytd.bsTotal,
+  }
+}
+
+// ─── Stage Snapshot (current pipeline state) ─────────────────
+
+async function countDealsInStageByStatus(stageId: number, status: 'open' | 'lost'): Promise<number> {
+  let total = 0
+  let start = 0
+  const limit = 500
+  for (let page = 0; page < 10; page++) {
+    const url = `${BASE_URL}/deals?pipeline_id=7&stage_id=${stageId}&status=${status}&start=${start}&limit=${limit}&api_token=${API_TOKEN}`
+    try {
+      const res  = await fetch(url, { signal: AbortSignal.timeout(8_000), cache: 'no-store' })
+      if (!res.ok) break
+      const json = await res.json()
+      if (!json.success || !Array.isArray(json.data)) break
+      total += json.data.length
+      if (!json.additional_data?.pagination?.more_items_in_collection) break
+      start += limit
+    } catch { break }
+  }
+  return total
+}
+
+export async function fetchStageCounts(): Promise<StageCount[]> {
+  const stages = [
+    { id: 70, label: 'Bank Submission' },
+    { id: 71, label: 'Bank Offer' },
+    { id: 72, label: 'Valuation' },
+    { id: 73, label: 'FEIN' },
+    { id: 75, label: 'Notary' },
+  ]
+  return Promise.all(
+    stages.map(async ({ id, label }) => {
+      const [openCount, lostCount] = await Promise.all([
+        countDealsInStageByStatus(id, 'open'),
+        countDealsInStageByStatus(id, 'lost'),
+      ])
+      return { stageId: id, label, openCount, lostCount }
+    }),
+  )
+}
+
+// ─── Financed Mortgage Volume ─────────────────────────────────
+
+export async function fetchMortgageVolume(year: number, months: number[]): Promise<MortgageSummary> {
+  // Won deals in period + currently open deals in Notary stage
+  const [wonDeals, notaryDeals] = await Promise.all([
+    fetchWonDealsForPipeline(7, new Date(year, 0, 1)),
+    fetchOpenDealsInStage(75),
+  ])
+
+  const inRange = (wonTime: string | null): boolean => {
+    if (!wonTime) return false
+    const d = new Date(wonTime)
+    return d.getFullYear() === year && months.includes(d.getMonth() + 1)
+  }
+
+  const parseAmt = (val: unknown): number => {
+    const n = parseFloat(String(val ?? '0'))
+    return isNaN(n) ? 0 : n
+  }
+
+  const map = new Map<string, { amount: number; count: number }>()
+  const add  = (bankName: string, amount: number) => {
+    if (!map.has(bankName)) map.set(bankName, { amount: 0, count: 0 })
+    const e = map.get(bankName)!
+    e.amount += amount
+    e.count  += 1
+  }
+
+  for (const deal of wonDeals) {
+    if (!inRange(deal.won_time)) continue
+    add((deal[FIELD_BANK_NAME] as string | null) ?? 'Sin banco', parseAmt(deal.value))
+  }
+  for (const deal of notaryDeals) {
+    add((deal[FIELD_BANK_NAME] as string | null) ?? 'Sin banco', parseAmt(deal.value))
+  }
+
+  const byBank = Array.from(map.entries())
+    .map(([bankName, { amount, count }]) => ({ bankName, amount, count }))
+    .sort((a, b) => b.amount - a.amount)
+
+  return {
+    total:  byBank.reduce((s, b) => s + b.amount, 0),
+    count:  byBank.reduce((s, b) => s + b.count,  0),
+    byBank,
+  }
 }
 
 // ─── Stage Deals (for cron overdue checks) ───────────────────

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { fetchBaytecaMetrics, fetchBaytecaRevenue } from '@/lib/pipedrive'
+import { fetchBaytecaMetrics, fetchBaytecaRevenue, fetchStageCounts, fetchMortgageVolume } from '@/lib/pipedrive'
 
 export const runtime     = 'nodejs'
 export const maxDuration = 60
@@ -27,19 +27,26 @@ export async function GET(request: NextRequest) {
       setTimeout(() => reject(new Error('Global timeout after 55s')), GLOBAL_TIMEOUT_MS),
     )
 
-    const [metrics, revenue] = await Promise.race([
+    const [metrics, revenue, stageCounts, mortgageVolume] = await Promise.race([
       Promise.all([
         fetchBaytecaMetrics(year, months),
         fetchBaytecaRevenue(year, months),
+        fetchStageCounts(),
+        fetchMortgageVolume(year, months),
       ]),
       timeout,
     ])
 
     return NextResponse.json({
-      kpis:    metrics.kpis,
-      funnel:  metrics.funnel,
-      bsTotal: metrics.bsTotal,
+      kpis:           metrics.kpis,
+      ytdKpis:        metrics.ytdKpis,
+      ytdBsTotal:     metrics.ytdBsTotal,
+      funnel:         metrics.funnel,
+      lostByStage:    metrics.lostByStage,
+      bsTotal:        metrics.bsTotal,
       revenue,
+      stageCounts,
+      mortgageVolume,
     })
   } catch (err) {
     console.warn('[dashboard/negocio] fetch failed:', err)
