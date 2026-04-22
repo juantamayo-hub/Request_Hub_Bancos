@@ -576,11 +576,12 @@ export async function fetchMortgageVolume(year: number, months: number[]): Promi
 // ─── Stage Deals (for cron overdue checks) ───────────────────
 
 export interface StageDeal {
-  id:       number
-  title:    string
-  status:   string
-  stage_id: number
-  owner_id: { name?: string; email?: string } | null
+  id:        number
+  title:     string
+  status:    string
+  stage_id:  number
+  owner_id:  { name?: string; email?: string } | null
+  person_id: { name?: string } | null
   [key: string]: unknown
 }
 

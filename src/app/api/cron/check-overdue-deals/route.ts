@@ -202,6 +202,7 @@ export async function GET(request: NextRequest) {
       const bankName   = (deal[FIELD_BANK_NAME] as string | null)
         ?? (deal.title as string | null)
         ?? `Deal #${dealId}`
+      const clientName = deal.person_id?.name ?? null
       const hours      = hoursElapsed(deal[rule.timestampField])
       const description = [
         `Deal #${dealId} lleva ${formatDuration(hours)} en stage ${rule.stageName}.`,
@@ -223,6 +224,7 @@ export async function GET(request: NextRequest) {
         sla_hours:         48,
         sla_deadline:      slaDeadline,
         bank_name:         bankName,
+        client_name:       clientName,
         pipedrive_deal_id: dealId,
       }
     })
