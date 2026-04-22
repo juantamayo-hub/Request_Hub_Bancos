@@ -137,6 +137,12 @@ export default async function AdminTicketDetailPage({ params }: Props) {
                   <p className="text-gray-500 mb-0.5">Última actualización</p>
                   <p className="font-medium">{formatDate(t.updated_at)}</p>
                 </div>
+                {(t as typeof t & { client_name?: string | null }).client_name && (
+                  <div>
+                    <p className="text-gray-500 mb-0.5">Cliente</p>
+                    <p className="font-medium">{(t as typeof t & { client_name?: string | null }).client_name}</p>
+                  </div>
+                )}
                 {(t as typeof t & { bank_name?: string | null }).bank_name && (
                   <div>
                     <p className="text-gray-500 mb-0.5">Banco</p>
@@ -147,6 +153,19 @@ export default async function AdminTicketDetailPage({ params }: Props) {
                   <div>
                     <p className="text-gray-500 mb-0.5">Email bancario</p>
                     <p className="font-medium">{(t as typeof t & { bank_email?: string | null }).bank_email}</p>
+                  </div>
+                )}
+                {(t as typeof t & { pipedrive_deal_id?: number | null }).pipedrive_deal_id && (
+                  <div>
+                    <p className="text-gray-500 mb-0.5">Deal Pipedrive</p>
+                    <a
+                      href={`https://app.pipedrive.com/deal/${(t as typeof t & { pipedrive_deal_id?: number | null }).pipedrive_deal_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-[#083D20] hover:underline"
+                    >
+                      #{(t as typeof t & { pipedrive_deal_id?: number | null }).pipedrive_deal_id} →
+                    </a>
                   </div>
                 )}
                 {t.sla_deadline && (
