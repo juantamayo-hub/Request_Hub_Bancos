@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse }                    from 'next/server'
 import { createAdminClient }                            from '@/lib/supabase/admin'
-import { fetchOpenDealsInStage }                        from '@/lib/pipedrive'
+import { fetchOpenDealsInStage, fetchDealStageId, updateDealField, FIELD_DEAL_SUMMARY } from '@/lib/pipedrive'
 import { postSlackDM, buildCronSummaryMessage }         from '@/lib/notifications/slack'
 
 // ── Vercel Cron config ────────────────────────────────────────
@@ -43,7 +43,7 @@ const OVERDUE_RULES: OverdueRule[] = [
     stageId:        72,
     categoryName:   'Valuation Overdue',
     timestampField: FIELD_VALUATION_TS,
-    thresholdHours: 120, // 5 days
+    thresholdHours: 240, // 10 days
     stageName:      'Valuation',
   },
   {
@@ -53,6 +53,28 @@ const OVERDUE_RULES: OverdueRule[] = [
     thresholdHours: 120, // 5 days
     stageName:      'FEIN',
   },
+]
+
+// ── Stage order for auto-close ────────────────────────────────
+
+const STAGE_ORDER = [70, 71, 79, 72, 73, 74, 75]
+
+function isPastStage(currentStage: number, triggerStage: number): boolean {
+  const ci = STAGE_ORDER.indexOf(currentStage)
+  const ti = STAGE_ORDER.indexOf(triggerStage)
+  return ci > ti && ci !== -1 && ti !== -1
+}
+
+interface AutoCloseRule {
+  categoryName: string
+  triggerStage: number
+}
+
+const AUTO_CLOSE_RULES: AutoCloseRule[] = [
+  { categoryName: 'Bank Submission Overdue',  triggerStage: 70 },
+  { categoryName: 'Valuation Overdue',        triggerStage: 72 },
+  { categoryName: 'FEIN Overdue',             triggerStage: 73 },
+  { categoryName: 'Acelerar emisión de FEIN', triggerStage: 73 },
 ]
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -103,6 +125,133 @@ export async function GET(request: NextRequest) {
 
   const categoryMap = new Map(cats.map(c => [c.name, c.id as string]))
 
+  // ── Pass 1: Snooze re-open ────────────────────────────────────
+  {
+    const { data: snoozedTickets } = await admin
+      .from('tickets')
+      .select('id, snoozed_until, snooze_previous_status')
+      .eq('status', 'closed')
+      .not('snoozed_until', 'is', null)
+      .lte('snoozed_until', new Date().toISOString())
+
+    for (const t of snoozedTickets ?? []) {
+      const prevStatus = (t.snooze_previous_status as string | null) ?? 'in_progress'
+      await admin.from('tickets').update({
+        status:                 prevStatus,
+        snoozed_until:          null,
+        snooze_previous_status: null,
+      }).eq('id', t.id)
+
+      await Promise.all([
+        admin.from('audit_log').insert({
+          ticket_id:  t.id,
+          actor_id:   '00000000-0000-0000-0000-000000000000',
+          action:     'status_changed',
+          from_value: 'closed',
+          to_value:   prevStatus,
+          metadata:   { auto: true, reason: 'snooze_expired' },
+        }),
+        admin.from('ticket_comments').insert({
+          ticket_id:  t.id,
+          author_id:  '00000000-0000-0000-0000-000000000000',
+          body:       'Ticket reabierto automáticamente.',
+          visibility: 'internal',
+        }),
+      ])
+    }
+    if ((snoozedTickets ?? []).length > 0) {
+      console.log(`[cron] snooze-reopen: reopened ${snoozedTickets!.length} tickets`)
+    }
+  }
+
+  // ── Pass 2: Auto-close tickets whose deal has progressed ─────
+  {
+    // Fetch all relevant category IDs (system + non-system)
+    const { data: allCats } = await admin
+      .from('categories')
+      .select('id, name')
+      .in('name', AUTO_CLOSE_RULES.map(r => r.categoryName))
+
+    if (allCats && allCats.length > 0) {
+      const allCatMap = new Map(allCats.map(c => [c.name, c.id as string]))
+
+      // Fetch open tickets for these categories with a deal ID
+      const catIds = allCats.map(c => c.id as string)
+      const { data: openTickets } = await admin
+        .from('tickets')
+        .select('id, category_id, pipedrive_deal_id')
+        .in('category_id', catIds)
+        .in('status', ['new', 'in_progress', 'waiting_on_employee'])
+        .not('pipedrive_deal_id', 'is', null)
+
+      if (openTickets && openTickets.length > 0) {
+        // Fetch current stage for all deals in parallel
+        const dealIds = [...new Set(openTickets.map(t => t.pipedrive_deal_id as number))]
+        const stageMap = new Map<number, number | null>()
+        await Promise.all(
+          dealIds.map(async dealId => {
+            const stage = await fetchDealStageId(dealId)
+            stageMap.set(dealId, stage)
+          }),
+        )
+
+        // Build category id → trigger stage map
+        const catTriggerMap = new Map<string, number>()
+        for (const rule of AUTO_CLOSE_RULES) {
+          const catId = allCatMap.get(rule.categoryName)
+          if (catId) catTriggerMap.set(catId, rule.triggerStage)
+        }
+
+        for (const ticket of openTickets) {
+          const triggerStage = catTriggerMap.get(ticket.category_id as string)
+          if (triggerStage === undefined) continue
+          const currentStage = stageMap.get(ticket.pipedrive_deal_id as number)
+          if (currentStage === null || currentStage === undefined) continue
+          if (!isPastStage(currentStage, triggerStage)) continue
+
+          // Close this ticket
+          await admin.from('tickets').update({ status: 'closed' }).eq('id', ticket.id)
+
+          // Fetch last public comment for deal summary
+          const { data: lastComment } = await admin
+            .from('ticket_comments')
+            .select('body')
+            .eq('ticket_id', ticket.id)
+            .eq('visibility', 'public')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single()
+
+          await Promise.all([
+            admin.from('audit_log').insert({
+              ticket_id:  ticket.id,
+              actor_id:   '00000000-0000-0000-0000-000000000000',
+              action:     'status_changed',
+              from_value: ticket.status as string,
+              to_value:   'closed',
+              metadata:   { auto: true, reason: 'deal_stage_progressed', stage: currentStage },
+            }),
+            admin.from('ticket_status_history').insert({
+              ticket_id:  ticket.id,
+              status:     'closed',
+              changed_by: '00000000-0000-0000-0000-000000000000',
+            }),
+            admin.from('ticket_comments').insert({
+              ticket_id:  ticket.id,
+              author_id:  '00000000-0000-0000-0000-000000000000',
+              body:       `Ticket cerrado automáticamente. El deal ha avanzado al stage ${currentStage}.`,
+              visibility: 'internal',
+            }),
+          ])
+
+          // 7.4 — deal summary
+          if (lastComment?.body && ticket.pipedrive_deal_id) {
+            updateDealField(ticket.pipedrive_deal_id as number, FIELD_DEAL_SUMMARY, lastComment.body).catch(console.error)
+          }
+        }
+      }
+    }
+  }
 
   let totalCreated = 0
   const summary: string[] = []

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notifyNewComment } from '@/lib/notifications'
+import { updateDealField, FIELD_CLAIM_CHANNEL, CLAIM_CHANNEL_IDS } from '@/lib/pipedrive'
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
@@ -47,6 +48,7 @@ export async function POST(
   let commentBody: string
   let visibility: 'public' | 'internal' = 'public'
   let files: File[] = []
+  let claimChannel: string | null = null
 
   const contentType = request.headers.get('content-type') ?? ''
 
@@ -60,6 +62,7 @@ export async function POST(
     commentBody  = (formData.get('body') as string | null) ?? ''
     visibility   = ((formData.get('visibility') as string | null) ?? 'public') as 'public' | 'internal'
     files        = formData.getAll('files') as File[]
+    claimChannel = (formData.get('claim_channel') as string | null) ?? null
   } else {
     let json: { body?: string; visibility?: string }
     try {
@@ -165,6 +168,22 @@ export async function POST(
           requesterEmail: email,
         }).catch(console.error)
       }
+    }
+  }
+
+  // 7.3 — vía de reclamación (fire-and-forget)
+  if (claimChannel && claimChannel !== 'N/A' && CLAIM_CHANNEL_IDS[claimChannel]) {
+    const { data: ticketForChannel } = await admin
+      .from('tickets')
+      .select('pipedrive_deal_id')
+      .eq('id', id)
+      .single()
+    if (ticketForChannel?.pipedrive_deal_id) {
+      updateDealField(
+        ticketForChannel.pipedrive_deal_id,
+        FIELD_CLAIM_CHANNEL,
+        [CLAIM_CHANNEL_IDS[claimChannel]],
+      ).catch(console.error)
     }
   }
 

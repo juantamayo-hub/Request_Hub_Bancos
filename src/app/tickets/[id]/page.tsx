@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/shared/StatusBadge'
 import { PriorityBadge } from '@/components/shared/PriorityBadge'
 import { CommentThread } from '@/components/tickets/CommentThread'
 import { AddCommentForm } from '@/components/tickets/AddCommentForm'
+import { CancelTicketButton } from '@/components/tickets/CancelTicketButton'
 import { formatDate, displayName, isSlaBreaching } from '@/lib/utils'
 import type { TicketWithRelations, TicketCommentWithAuthor } from '@/lib/database.types'
 
@@ -85,7 +86,14 @@ export default async function TicketDetailPage({ params }: Props) {
               <span>/</span>
               <span className="font-mono text-gray-700">{t.display_id}</span>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">{t.subject}</h1>
+            <div className="flex items-start justify-between gap-4">
+              <h1 className="text-2xl font-bold text-gray-900">{t.subject}</h1>
+              {t.created_by === profile.id && (
+                <div className="shrink-0 mt-1">
+                  <CancelTicketButton ticketId={id} />
+                </div>
+              )}
+            </div>
             <div className="flex items-center gap-3 mt-2 flex-wrap">
               <StatusBadge status={t.status} />
               <PriorityBadge priority={t.priority} />
@@ -171,7 +179,11 @@ export default async function TicketDetailPage({ params }: Props) {
               currentProfileId={profile.id}
             />
             <div className="mt-4 pt-4 border-t border-gray-100">
-              <AddCommentForm ticketId={id} isAdmin={profile.role === 'admin'} />
+              <AddCommentForm
+                ticketId={id}
+                isAdmin={profile.role === 'admin'}
+                pipedriveDealId={(t as typeof t & { pipedrive_deal_id?: number | null }).pipedrive_deal_id ?? undefined}
+              />
             </div>
           </div>
 

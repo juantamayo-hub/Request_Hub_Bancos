@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 
 interface Props {
-  ticketId: string
-  isAdmin?: boolean
+  ticketId:          string
+  isAdmin?:          boolean
+  pipedriveDealId?:  number
 }
 
 function formatBytes(bytes: number) {
@@ -17,13 +18,14 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function AddCommentForm({ ticketId, isAdmin = false }: Props) {
+export function AddCommentForm({ ticketId, isAdmin = false, pipedriveDealId }: Props) {
   const router      = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [body,       setBody]       = useState('')
-  const [visibility, setVisibility] = useState<'public' | 'internal'>('public')
-  const [files,      setFiles]      = useState<File[]>([])
-  const [loading,    setLoading]    = useState(false)
+  const [body,         setBody]         = useState('')
+  const [visibility,   setVisibility]   = useState<'public' | 'internal'>('public')
+  const [files,        setFiles]        = useState<File[]>([])
+  const [loading,      setLoading]      = useState(false)
+  const [claimChannel, setClaimChannel] = useState('N/A')
 
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files ?? [])
@@ -48,6 +50,7 @@ export function AddCommentForm({ ticketId, isAdmin = false }: Props) {
       fd.append('body', body.trim())
       fd.append('visibility', visibility)
       files.forEach(f => fd.append('files', f))
+      if (pipedriveDealId) fd.append('claim_channel', claimChannel)
 
       const res = await fetch(`/api/tickets/${ticketId}/comments`, {
         method:      'POST',
@@ -64,6 +67,7 @@ export function AddCommentForm({ ticketId, isAdmin = false }: Props) {
       toast.success('Comment posted.')
       setBody('')
       setFiles([])
+      setClaimChannel('N/A')
       router.refresh()
     } catch {
       toast.error('Connection error. Check your network and try again.')
@@ -106,6 +110,22 @@ export function AddCommentForm({ ticketId, isAdmin = false }: Props) {
             </li>
           ))}
         </ul>
+      )}
+
+      {pipedriveDealId && (
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-500 font-medium shrink-0">Vía de reclamación</label>
+          <select
+            value={claimChannel}
+            onChange={e => setClaimChannel(e.target.value)}
+            className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-gray-900"
+          >
+            <option value="N/A">N/A</option>
+            <option value="Phone">Teléfono</option>
+            <option value="Email">Email</option>
+            <option value="WhatsApp">WhatsApp</option>
+          </select>
+        </div>
       )}
 
       <div className="flex items-center gap-3">

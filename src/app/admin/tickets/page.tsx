@@ -11,10 +11,13 @@ export const metadata: Metadata = { title: 'Admin — Todas las Solicitudes' }
 
 interface Props {
   searchParams: Promise<{
-    status?:   TicketStatus
-    priority?: TicketPriority
-    q?:        string
-    assignee?: string
+    status?:      TicketStatus
+    priority?:    TicketPriority
+    q?:           string
+    assignee?:    string
+    category_id?: string
+    from?:        string
+    to?:          string
   }>
 }
 
@@ -33,18 +36,22 @@ export default async function AdminTicketsPage({ searchParams }: Props) {
       assignee:profiles!tickets_assignee_id_fkey(id, email, first_name, last_name, avatar_url)
     `)
 
-  if (sp.status)   query = query.eq('status', sp.status)
-  if (sp.priority) query = query.eq('priority', sp.priority)
-  if (sp.assignee) query = query.eq('assignee_id', sp.assignee)
+  if (sp.status)      query = query.eq('status', sp.status)
+  if (sp.priority)    query = query.eq('priority', sp.priority)
+  if (sp.assignee)    query = query.eq('assignee_id', sp.assignee)
+  if (sp.category_id) query = query.eq('category_id', sp.category_id)
+  if (sp.from)        query = query.gte('created_at', sp.from)
+  if (sp.to)          query = query.lte('created_at', `${sp.to}T23:59:59`)
   if (sp.q) {
     query = query.or(
       `subject.ilike.%${sp.q}%,display_id.ilike.%${sp.q}%`,
     )
   }
 
-  const [{ data: tickets }, { data: admins }] = await Promise.all([
+  const [{ data: tickets }, { data: admins }, { data: categories }] = await Promise.all([
     query.order('created_at', { ascending: false }),
     supabase.from('profiles').select('id, email, first_name, last_name').eq('role', 'admin').order('first_name'),
+    supabase.from('categories').select('id, name').eq('is_active', true).order('name'),
   ])
 
   return (
@@ -63,7 +70,7 @@ export default async function AdminTicketsPage({ searchParams }: Props) {
           </Link>
         </div>
 
-        <AdminFilters current={sp} admins={admins ?? []} />
+        <AdminFilters current={sp} admins={admins ?? []} categories={categories ?? []} />
 
         <div className="mt-4">
           <TicketList

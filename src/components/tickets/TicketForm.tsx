@@ -29,19 +29,30 @@ interface DealInfo {
   clientName: string | null
 }
 
+interface OpenTicket {
+  id:         string
+  display_id: string
+  subject:    string
+  status:     string
+  categories: { name: string } | null
+}
+
 export function TicketForm({ categories }: Props) {
   const router  = useRouter()
   const [loading, setLoading] = useState(false)
 
-  const [categoryId,  setCategoryId]  = useState('')
-  const [dealId,      setDealId]      = useState('')
-  const [dealInfo,    setDealInfo]    = useState<DealInfo | null>(null)
-  const [dealLoading, setDealLoading] = useState(false)
-  const [dealError,   setDealError]   = useState<string | null>(null)
-  const [bankName,    setBankName]    = useState('')
-  const [bankEmail,   setBankEmail]   = useState('')
-  const [clientName,  setClientName]  = useState('')
-  const [description, setDescription] = useState('')
+  const [categoryId,    setCategoryId]    = useState('')
+  const [dealId,        setDealId]        = useState('')
+  const [dealInfo,      setDealInfo]      = useState<DealInfo | null>(null)
+  const [dealLoading,   setDealLoading]   = useState(false)
+  const [dealError,     setDealError]     = useState<string | null>(null)
+  const [bankName,      setBankName]      = useState('')
+  const [bankEmail,     setBankEmail]     = useState('')
+  const [clientName,    setClientName]    = useState('')
+  const [description,   setDescription]  = useState('')
+  const [openTickets,   setOpenTickets]   = useState<OpenTicket[]>([])
+  const [followingIds,  setFollowingIds]  = useState<Set<string>>(new Set())
+  const [followLoading, setFollowLoading] = useState<Set<string>>(new Set())
 
   const dealDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -55,6 +66,8 @@ export function TicketForm({ categories }: Props) {
       setBankName('')
       setBankEmail('')
       setClientName('')
+      setOpenTickets([])
+      setFollowingIds(new Set())
       return
     }
 
@@ -93,10 +106,40 @@ export function TicketForm({ categories }: Props) {
       setBankName(info.bankName)
       setBankEmail(info.bankEmail)
       setClientName(info.clientName ?? '')
+
+      // Check for existing open tickets on this deal
+      try {
+        const dupRes  = await fetch(`/api/tickets/deal/${parsed}`)
+        const dupData = await dupRes.json()
+        setOpenTickets(dupRes.ok ? (dupData.tickets ?? []) : [])
+      } catch {
+        setOpenTickets([])
+      }
     } catch {
       setDealError('Error de conexión al verificar el deal.')
     } finally {
       setDealLoading(false)
+    }
+  }
+
+  const handleFollow = async (ticketId: string) => {
+    setFollowLoading(prev => new Set(prev).add(ticketId))
+    try {
+      const res  = await fetch(`/api/tickets/${ticketId}/follow`, { method: 'POST', credentials: 'include' })
+      const data = await res.json()
+      if (res.ok) {
+        setFollowingIds(prev => {
+          const next = new Set(prev)
+          if (data.following) next.add(ticketId)
+          else next.delete(ticketId)
+          return next
+        })
+        toast.success(data.following ? 'Siguiendo el ticket.' : 'Dejaste de seguir el ticket.')
+      }
+    } catch {
+      toast.error('Error al seguir el ticket.')
+    } finally {
+      setFollowLoading(prev => { const next = new Set(prev); next.delete(ticketId); return next })
     }
   }
 
@@ -218,6 +261,45 @@ export function TicketForm({ categories }: Props) {
             ✓ Deal verificado — {dealInfo.bankName || 'banco no especificado en Pipedrive'}
             {dealInfo.clientName ? ` · ${dealInfo.clientName}` : ''}
           </p>
+        )}
+        {openTickets.length > 0 && (
+          <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <p className="font-medium mb-1">⚠️ Ya existe un ticket abierto para este deal:</p>
+            <ul className="space-y-1.5">
+              {openTickets.map(ot => {
+                const isFollowing = followingIds.has(ot.id)
+                const isLoadingFollow = followLoading.has(ot.id)
+                return (
+                  <li key={ot.id} className="flex items-center gap-2 flex-wrap">
+                    <a
+                      href={`/tickets/${ot.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono hover:underline text-amber-900 shrink-0"
+                    >
+                      {ot.display_id}
+                    </a>
+                    <span className="text-amber-700 flex-1 min-w-0 truncate">
+                      {ot.categories?.name ?? ''} — {ot.subject}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleFollow(ot.id)}
+                      disabled={isLoadingFollow}
+                      className={`shrink-0 text-xs px-2 py-0.5 rounded border transition-colors disabled:opacity-50 ${
+                        isFollowing
+                          ? 'border-amber-400 bg-amber-100 text-amber-800 hover:bg-amber-200'
+                          : 'border-amber-300 text-amber-700 hover:bg-amber-100'
+                      }`}
+                    >
+                      {isLoadingFollow ? '…' : isFollowing ? '✓ Siguiendo' : '+ Seguir'}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+            <p className="mt-2 text-amber-600">Sigue el ticket para verlo en tus solicitudes, o crea uno nuevo si es necesario.</p>
+          </div>
         )}
       </div>
 

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notifyTicketCreated } from '@/lib/notifications'
-import { createDealNote } from '@/lib/pipedrive'
+import { createDealNote, updateDealField, FIELD_CLAIM_DATE, FIELD_CLAIM_OWNER } from '@/lib/pipedrive'
 import type { CreateTicketInput } from '@/lib/database.types'
 
 /**
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
       client_name:       client_name?.trim() ?? null,
       pipedrive_deal_id: pipedrive_deal_id ?? null,
     })
-    .select('id, display_id, subject, status, priority')
+    .select('id, display_id, subject, status, priority, created_at')
     .single()
 
   if (insertErr || !ticket) {
@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
     assigneeEmail:  assigneeEmail ?? undefined,
   }).catch(console.error)
 
-  // ─── Pipedrive note (fire-and-forget) ────────────────────────
+  // ─── Pipedrive note + field updates (fire-and-forget) ────────
   if (pipedrive_deal_id) {
     const ticketUrl    = `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/tickets/${ticket.id}`
     const assigneeLine = assigneeEmail ? `\nAsignado a: ${assigneeEmail}` : ''
@@ -162,6 +162,25 @@ export async function POST(request: NextRequest) {
     createDealNote(pipedrive_deal_id, noteContent).catch(err =>
       console.error('Pipedrive note error:', err),
     )
+
+    // 7.1 — fecha de reclamación
+    const claimDate = new Date(ticket.created_at ?? Date.now()).toISOString().slice(0, 10)
+    updateDealField(pipedrive_deal_id, FIELD_CLAIM_DATE, claimDate).catch(console.error)
+
+    // 7.2 — nombre del responsable del ticket
+    if (assigneeId) {
+      const { data: assigneeProfile } = await admin
+        .from('profiles')
+        .select('first_name, last_name, email')
+        .eq('id', assigneeId)
+        .single()
+      if (assigneeProfile) {
+        const assigneeName = assigneeProfile.first_name
+          ? `${assigneeProfile.first_name} ${assigneeProfile.last_name ?? ''}`.trim()
+          : assigneeProfile.email
+        updateDealField(pipedrive_deal_id, FIELD_CLAIM_OWNER, assigneeName).catch(console.error)
+      }
+    }
   }
 
   return NextResponse.json({ ticket }, { status: 201 })

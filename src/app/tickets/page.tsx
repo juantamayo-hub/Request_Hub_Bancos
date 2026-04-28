@@ -4,15 +4,25 @@ import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { Navbar } from '@/components/layout/Navbar'
 import { TicketList } from '@/components/tickets/TicketList'
+import { TicketFilters } from '@/components/tickets/TicketFilters'
 import type { TicketWithRelations } from '@/lib/database.types'
 
 export const metadata: Metadata = { title: 'Mis Solicitudes' }
 
-export default async function MyTicketsPage() {
+interface Props {
+  searchParams: Promise<{
+    category_id?: string
+    from?:        string
+    to?:          string
+  }>
+}
+
+export default async function MyTicketsPage({ searchParams }: Props) {
+  const sp      = await searchParams
   const profile = await requireProfile()
   const supabase = await createClient()
 
-  const { data: tickets } = await supabase
+  let query = supabase
     .from('tickets')
     .select(`
       *,
@@ -20,7 +30,15 @@ export default async function MyTicketsPage() {
       profiles!tickets_created_by_fkey(id, email, first_name, last_name, avatar_url),
       assignee:profiles!tickets_assignee_id_fkey(id, email, first_name, last_name, avatar_url)
     `)
-    .order('created_at', { ascending: false })
+
+  if (sp.category_id) query = query.eq('category_id', sp.category_id)
+  if (sp.from)        query = query.gte('created_at', sp.from)
+  if (sp.to)          query = query.lte('created_at', `${sp.to}T23:59:59`)
+
+  const [{ data: tickets }, { data: categories }] = await Promise.all([
+    query.order('created_at', { ascending: false }),
+    supabase.from('categories').select('id, name').eq('is_active', true).eq('is_system', false).order('name'),
+  ])
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#FAFAF8' }}>
@@ -38,6 +56,11 @@ export default async function MyTicketsPage() {
             + Nueva Solicitud
           </Link>
         </div>
+
+        <TicketFilters
+          current={{ category_id: sp.category_id, from: sp.from, to: sp.to }}
+          categories={categories ?? []}
+        />
 
         <TicketList tickets={(tickets ?? []) as TicketWithRelations[]} />
       </main>

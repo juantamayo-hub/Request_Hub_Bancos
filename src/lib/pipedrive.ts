@@ -19,6 +19,19 @@ const FIELD_BANK_EMAIL     = '498dd83b5c5e1f1181c232131933717ceadfda34'
 const FIELD_BANK_FEE       = 'a04769981931d317d4412a5dce1fe5f98ae2fb4d'       // Pipeline 7
 const FIELD_MEMBERSHIP_AMT = '3d671c93e592fa9fe7f63aa1bf50211f7bdfaeda'  // Pipeline 10
 
+// Claim / reclamación fields (written by Request Hub on ticket events)
+export const FIELD_CLAIM_DATE    = 'c2f1c7dd74cf7062018aa780fdb2b97be9a17572'
+export const FIELD_CLAIM_OWNER   = 'dd09ca0fa21ace10f6e44eaba4dad8b22d769972'
+export const FIELD_CLAIM_CHANNEL = 'f93a9561404bca277316c7b5ee794b7bde1b40bf'
+export const FIELD_DEAL_SUMMARY  = '09c8dc3c0e475f225cb07297ea65118f3a713de5'
+
+// Option IDs for the FIELD_CLAIM_CHANNEL enum field
+export const CLAIM_CHANNEL_IDS: Record<string, number> = {
+  Phone:     3567,
+  Email:     3568,
+  WhatsApp:  3569,
+}
+
 // ─── Types ────────────────────────────────────────────────────
 
 export interface DealValidationResult {
@@ -94,6 +107,36 @@ export async function createDealNote(dealId: number, content: string): Promise<v
     const body = await res.text()
     console.error(`Pipedrive note creation failed for deal ${dealId}:`, body)
     throw new Error(`No se pudo crear la nota en Pipedrive (${res.status}).`)
+  }
+}
+
+// ─── Generic field updater ────────────────────────────────────
+
+export async function updateDealField(dealId: number, fieldKey: string, value: unknown): Promise<void> {
+  const res = await fetch(`${BASE_URL}/deals/${dealId}?api_token=${API_TOKEN}`, {
+    method:  'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ [fieldKey]: value }),
+  })
+  if (!res.ok) {
+    const body = await res.text()
+    console.error(`[pipedrive] updateDealField(${dealId}, ${fieldKey}) failed (${res.status}):`, body)
+  }
+}
+
+// ─── Fetch deal stage_id ──────────────────────────────────────
+
+export async function fetchDealStageId(dealId: number): Promise<number | null> {
+  try {
+    const res = await fetch(
+      `${BASE_URL}/deals/${dealId}?api_token=${API_TOKEN}`,
+      { signal: AbortSignal.timeout(8_000), cache: 'no-store' },
+    )
+    if (!res.ok) return null
+    const json = await res.json()
+    return (json.data?.stage_id as number | undefined) ?? null
+  } catch {
+    return null
   }
 }
 

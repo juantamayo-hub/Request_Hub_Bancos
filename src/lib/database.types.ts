@@ -60,13 +60,21 @@ export interface Ticket {
   sla_hours:    number | null
   sla_deadline: string | null
   tags:         string[] | null
-  bank_name:         string | null
-  bank_email:        string | null
-  client_name:       string | null
-  pipedrive_deal_id: number | null
-  created_at:        string
-  updated_at:   string
-  resolved_at:  string | null
+  bank_name:              string | null
+  bank_email:             string | null
+  client_name:            string | null
+  pipedrive_deal_id:      number | null
+  snoozed_until?:         string | null
+  snooze_previous_status?: string | null
+  created_at:             string
+  updated_at:             string
+  resolved_at:            string | null
+}
+
+export interface TicketFollower {
+  ticket_id:  string
+  user_id:    string
+  created_at: string
 }
 
 export interface TicketComment {

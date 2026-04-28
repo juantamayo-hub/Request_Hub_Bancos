@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/shared/StatusBadge'
 import { PriorityBadge } from '@/components/shared/PriorityBadge'
 import { CommentThread } from '@/components/tickets/CommentThread'
 import { AddCommentForm } from '@/components/tickets/AddCommentForm'
+import { SnoozeButton } from '@/components/tickets/SnoozeButton'
 import { AdminTicketActions } from '@/components/admin/AdminTicketActions'
 import { formatDate, displayName, isSlaBreaching } from '@/lib/utils'
 import type { TicketWithRelations, TicketCommentWithAuthor, AuditLogWithActor, Profile } from '@/lib/database.types'
@@ -108,7 +109,12 @@ export default async function AdminTicketDetailPage({ params }: Props) {
                 <span>/</span>
                 <span className="font-mono text-gray-700">{t.display_id}</span>
               </div>
-              <h1 className="text-2xl font-bold text-gray-900">{t.subject}</h1>
+              <div className="flex items-start justify-between gap-4">
+                <h1 className="text-2xl font-bold text-gray-900">{t.subject}</h1>
+                <div className="shrink-0 mt-1">
+                  <SnoozeButton ticketId={id} currentStatus={t.status} />
+                </div>
+              </div>
               <div className="flex items-center gap-3 mt-2 flex-wrap">
                 <StatusBadge status={t.status} />
                 <PriorityBadge priority={t.priority} />
@@ -186,7 +192,11 @@ export default async function AdminTicketDetailPage({ params }: Props) {
               <h2 className="font-semibold text-gray-900 mb-4">Comentarios</h2>
               <CommentThread comments={comments} currentProfileId={profile.id} isAdmin />
               <div className="mt-4 pt-4 border-t border-gray-100">
-                <AddCommentForm ticketId={id} isAdmin />
+                <AddCommentForm
+                ticketId={id}
+                isAdmin
+                pipedriveDealId={(t as typeof t & { pipedrive_deal_id?: number | null }).pipedrive_deal_id ?? undefined}
+              />
               </div>
             </div>
 

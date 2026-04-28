@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notifyStatusChanged, notifyAssigned, notifyTicketCancelled } from '@/lib/notifications'
 import type { UpdateTicketInput, TicketStatus } from '@/lib/database.types'
+import { updateDealField, FIELD_DEAL_SUMMARY } from '@/lib/pipedrive'
 
 /**
  * PATCH /api/admin/tickets/[id]
@@ -56,7 +57,7 @@ export async function PATCH(
 
   const { data: current, error: fetchErr } = await admin
     .from('tickets')
-    .select('id, display_id, subject, status, priority, assignee_id, profiles!tickets_created_by_fkey(email), categories(name)')
+    .select('id, display_id, subject, status, priority, assignee_id, pipedrive_deal_id, profiles!tickets_created_by_fkey(email), categories(name)')
     .eq('id', id)
     .single()
 
@@ -200,6 +201,24 @@ export async function PATCH(
         updatedBy:      profile.email,
         requesterEmail,
       }).catch(console.error)
+    }
+  }
+
+  // 7.4 — deal summary = last public comment (fire-and-forget, only on close)
+  if (body.status === 'closed') {
+    const dealId = (current as typeof current & { pipedrive_deal_id?: number | null }).pipedrive_deal_id
+    if (dealId) {
+      const { data: lastComment } = await admin
+        .from('ticket_comments')
+        .select('body')
+        .eq('ticket_id', id)
+        .eq('visibility', 'public')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+      if (lastComment?.body) {
+        updateDealField(dealId, FIELD_DEAL_SUMMARY, lastComment.body).catch(console.error)
+      }
     }
   }
 
