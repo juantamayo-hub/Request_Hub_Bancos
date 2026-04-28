@@ -179,7 +179,7 @@ export async function GET(request: NextRequest) {
       const catIds = allCats.map(c => c.id as string)
       const { data: openTickets } = await admin
         .from('tickets')
-        .select('id, category_id, pipedrive_deal_id')
+        .select('id, status, category_id, pipedrive_deal_id')
         .in('category_id', catIds)
         .in('status', ['new', 'in_progress', 'waiting_on_employee'])
         .not('pipedrive_deal_id', 'is', null)

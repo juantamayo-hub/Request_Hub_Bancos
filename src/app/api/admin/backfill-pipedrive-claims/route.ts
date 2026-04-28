@@ -46,7 +46,8 @@ export async function POST(request: NextRequest) {
   let processed = 0
   const tasks = tickets.map(ticket => {
     const dealId = ticket.pipedrive_deal_id as number
-    const rawAssignee = ticket.assignee as { first_name: string | null; last_name: string | null; email: string } | null
+    const rawAssigneeUnknown = ticket.assignee
+    const rawAssignee = (Array.isArray(rawAssigneeUnknown) ? rawAssigneeUnknown[0] : rawAssigneeUnknown) as { first_name: string | null; last_name: string | null; email: string } | null
     if (!rawAssignee) return null
 
     const assigneeName = rawAssignee.first_name
