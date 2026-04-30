@@ -10,6 +10,11 @@ export interface SlackMessage {
 
 // ─── DM via Bot Token ─────────────────────────────────────────
 
+/** Fallback Slack user IDs for emails that can't be resolved by email lookup. */
+const SLACK_FALLBACK_USER_IDS: Record<string, string> = {
+  'silvia.amigo@bayteca.com': 'U03KR9ULVLH',
+}
+
 /**
  * Sends a Slack DM to a user identified by email.
  *
@@ -34,9 +39,17 @@ export async function postSlackDM(email: string, message: SlackMessage): Promise
     )
     const lookup = await lookupRes.json() as { ok: boolean; user?: { id: string }; error?: string }
 
-    if (!lookup.ok || !lookup.user?.id) {
-      console.warn(`[Slack DM] Could not find user for ${email}: ${lookup.error ?? 'not_found'}`)
-      return false
+    let slackUserId: string | undefined = lookup.user?.id
+
+    if (!lookup.ok || !slackUserId) {
+      const fallbackId = SLACK_FALLBACK_USER_IDS[email.toLowerCase()]
+      if (fallbackId) {
+        console.warn(`[Slack DM] Falling back to hardcoded ID for ${email}: ${fallbackId}`)
+        slackUserId = fallbackId
+      } else {
+        console.warn(`[Slack DM] Could not find user for ${email}: ${lookup.error ?? 'not_found'}`)
+        return false
+      }
     }
 
     // 2. Send DM — using the user ID as channel opens a DM automatically
@@ -47,7 +60,7 @@ export async function postSlackDM(email: string, message: SlackMessage): Promise
         Authorization:  `Bearer ${botToken}`,
       },
       body: JSON.stringify({
-        channel: lookup.user.id,
+        channel: slackUserId,
         text:    message.text,
         blocks:  message.blocks,
       }),
@@ -224,16 +237,20 @@ export function buildTicketClosedFeedbackMessage(p: {
 }
 
 /**
- * DM sent to the requester when an admin adds a public comment on their ticket.
+ * DM sent when a public comment is added on a ticket.
+ * Pass isAdmin=true to link to the admin view instead of the employee view.
  */
 export function buildNewCommentMessage(p: {
-  displayId:     string
-  subject:       string
+  displayId:      string
+  subject:        string
   commentPreview: string
-  ticketId:      string
-  appUrl:        string
+  ticketId:       string
+  appUrl:         string
+  isAdmin?:       boolean
 }): SlackMessage {
-  const url     = `${p.appUrl}/tickets/${p.ticketId}`
+  const url = p.isAdmin
+    ? `${p.appUrl}/admin/tickets/${p.ticketId}`
+    : `${p.appUrl}/tickets/${p.ticketId}`
   const preview = p.commentPreview.length > 200
     ? p.commentPreview.slice(0, 200) + '…'
     : p.commentPreview

@@ -1,9 +1,9 @@
 'use client'
 
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { useCallback, useTransition } from 'react'
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import { TICKET_STATUSES, TICKET_PRIORITIES } from '@/lib/constants'
-import type { TicketStatus, TicketPriority } from '@/lib/database.types'
+import type { TicketPriority } from '@/lib/database.types'
 
 interface AdminOption {
   id:         string
@@ -19,13 +19,13 @@ interface CategoryOption {
 
 interface Props {
   current: {
-    status?:      TicketStatus
-    priority?:    TicketPriority
-    q?:           string
-    assignee?:    string
-    category_id?: string
-    from?:        string
-    to?:          string
+    statuses?:      string  // comma-separated TicketStatus values
+    priority?:      TicketPriority
+    q?:             string
+    assignee?:      string
+    category_ids?:  string  // comma-separated category IDs
+    from?:          string
+    to?:            string
   }
   admins:      AdminOption[]
   categories?: CategoryOption[]
@@ -36,6 +36,24 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
   const pathname   = usePathname()
   const params     = useSearchParams()
   const [, startTransition] = useTransition()
+
+  const [catOpen, setCatOpen]       = useState(false)
+  const [statusOpen, setStatusOpen] = useState(false)
+  const catRef    = useRef<HTMLDivElement>(null)
+  const statusRef = useRef<HTMLDivElement>(null)
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (catRef.current && !catRef.current.contains(e.target as Node)) setCatOpen(false)
+      if (statusRef.current && !statusRef.current.contains(e.target as Node)) setStatusOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const selectedCatIds    = (current.category_ids ?? '').split(',').filter(Boolean)
+  const selectedStatuses  = (current.statuses ?? '').split(',').filter(Boolean)
 
   const update = useCallback(
     (key: string, value: string) => {
@@ -49,11 +67,39 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
     [params, pathname, router],
   )
 
+  const toggleCategory = useCallback(
+    (id: string) => {
+      const next = selectedCatIds.includes(id)
+        ? selectedCatIds.filter(x => x !== id)
+        : [...selectedCatIds, id]
+      const nextStr = next.join(',')
+      const nextParams = new URLSearchParams(params.toString())
+      if (nextStr) nextParams.set('category_ids', nextStr)
+      else nextParams.delete('category_ids')
+      startTransition(() => router.push(`${pathname}?${nextParams.toString()}`))
+    },
+    [selectedCatIds, params, pathname, router],
+  )
+
+  const toggleStatus = useCallback(
+    (value: string) => {
+      const next = selectedStatuses.includes(value)
+        ? selectedStatuses.filter(x => x !== value)
+        : [...selectedStatuses, value]
+      const nextStr = next.join(',')
+      const nextParams = new URLSearchParams(params.toString())
+      if (nextStr) nextParams.set('statuses', nextStr)
+      else nextParams.delete('statuses')
+      startTransition(() => router.push(`${pathname}?${nextParams.toString()}`))
+    },
+    [selectedStatuses, params, pathname, router],
+  )
+
   const clear = () => {
     startTransition(() => router.push(pathname))
   }
 
-  const hasFilters = !!(current.status || current.priority || current.q || current.assignee || current.category_id || current.from || current.to)
+  const hasFilters = !!(current.statuses || current.priority || current.q || current.assignee || current.category_ids || current.from || current.to)
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
@@ -66,17 +112,37 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
         className="h-8 px-3 text-sm border border-gray-300 rounded-lg w-44 focus:outline-none focus:ring-2 focus:ring-gray-900"
       />
 
-      {/* Status filter */}
-      <select
-        value={current.status ?? ''}
-        onChange={e => update('status', e.target.value)}
-        className="h-8 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
-      >
-        <option value="">All statuses</option>
-        {TICKET_STATUSES.map(s => (
-          <option key={s.value} value={s.value}>{s.label}</option>
-        ))}
-      </select>
+      {/* Status multiselect */}
+      <div className="relative" ref={statusRef}>
+        <button
+          type="button"
+          onClick={() => setStatusOpen(o => !o)}
+          className="h-8 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white flex items-center gap-1.5 whitespace-nowrap"
+        >
+          {selectedStatuses.length === 0
+            ? 'All statuses'
+            : `${selectedStatuses.length} estado${selectedStatuses.length !== 1 ? 's' : ''}`}
+          <span className="text-gray-400 text-xs">▾</span>
+        </button>
+        {statusOpen && (
+          <div className="absolute top-9 left-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[180px]">
+            {TICKET_STATUSES.map(s => (
+              <label
+                key={s.value}
+                className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer text-sm"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedStatuses.includes(s.value)}
+                  onChange={() => toggleStatus(s.value)}
+                  className="rounded border-gray-300"
+                />
+                {s.label}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Priority filter */}
       <select
@@ -90,18 +156,38 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
         ))}
       </select>
 
-      {/* Category filter */}
+      {/* Category multiselect */}
       {categories.length > 0 && (
-        <select
-          value={current.category_id ?? ''}
-          onChange={e => update('category_id', e.target.value)}
-          className="h-8 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
-        >
-          <option value="">Todas las categorías</option>
-          {categories.map(c => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
+        <div className="relative" ref={catRef}>
+          <button
+            type="button"
+            onClick={() => setCatOpen(o => !o)}
+            className="h-8 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white flex items-center gap-1.5 whitespace-nowrap"
+          >
+            {selectedCatIds.length === 0
+              ? 'Todas las categorías'
+              : `${selectedCatIds.length} categoría${selectedCatIds.length !== 1 ? 's' : ''}`}
+            <span className="text-gray-400 text-xs">▾</span>
+          </button>
+          {catOpen && (
+            <div className="absolute top-9 left-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[220px] max-h-64 overflow-y-auto">
+              {categories.map(c => (
+                <label
+                  key={c.id}
+                  className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedCatIds.includes(c.id)}
+                    onChange={() => toggleCategory(c.id)}
+                    className="rounded border-gray-300"
+                  />
+                  {c.name}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Date range */}

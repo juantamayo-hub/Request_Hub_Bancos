@@ -82,36 +82,47 @@ export async function notifyAdminPromoted(p: {
 }
 
 /**
- * Fires when an admin adds a public comment on a ticket.
- * Notifies the requester via Slack DM and email.
+ * Fires when someone comments publicly on a ticket.
+ * - If the requester (ticket opener) commented → notifies the owner (assignee) via Slack DM.
+ * - Otherwise → notifies the requester via Slack DM + email.
  */
 export async function notifyNewComment(p: {
   ticketId:       string
   displayId:      string
   subject:        string
   commentPreview: string
-  requesterEmail: string
+  recipientEmail: string
+  isOwner?:       boolean  // true = recipient is the assignee (admin view link, no email)
 }) {
-  await Promise.allSettled([
+  const tasks: Promise<unknown>[] = [
     postSlackDM(
-      p.requesterEmail,
+      p.recipientEmail,
       buildNewCommentMessage({
         displayId:      p.displayId,
         subject:        p.subject,
         commentPreview: p.commentPreview,
         ticketId:       p.ticketId,
         appUrl:         APP_URL,
+        isAdmin:        p.isOwner,
       }),
     ),
-    sendEmail(buildNewCommentEmail({
-      to:             p.requesterEmail,
-      displayId:      p.displayId,
-      subject:        p.subject,
-      commentPreview: p.commentPreview,
-      ticketId:       p.ticketId,
-      appUrl:         APP_URL,
-    })),
-  ])
+  ]
+
+  // Only send email when notifying the requester (not the admin owner)
+  if (!p.isOwner) {
+    tasks.push(
+      sendEmail(buildNewCommentEmail({
+        to:             p.recipientEmail,
+        displayId:      p.displayId,
+        subject:        p.subject,
+        commentPreview: p.commentPreview,
+        ticketId:       p.ticketId,
+        appUrl:         APP_URL,
+      })),
+    )
+  }
+
+  await Promise.allSettled(tasks)
 }
 
 /**

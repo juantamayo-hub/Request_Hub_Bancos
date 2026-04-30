@@ -5,19 +5,19 @@ import { createClient } from '@/lib/supabase/server'
 import { Navbar } from '@/components/layout/Navbar'
 import { AdminFilters } from '@/components/admin/AdminFilters'
 import { TicketList } from '@/components/tickets/TicketList'
-import type { TicketWithRelations, TicketStatus, TicketPriority } from '@/lib/database.types'
+import type { TicketWithRelations, TicketPriority } from '@/lib/database.types'
 
 export const metadata: Metadata = { title: 'Admin — Todas las Solicitudes' }
 
 interface Props {
   searchParams: Promise<{
-    status?:      TicketStatus
-    priority?:    TicketPriority
-    q?:           string
-    assignee?:    string
-    category_id?: string
-    from?:        string
-    to?:          string
+    statuses?:      string  // comma-separated
+    priority?:      TicketPriority
+    q?:             string
+    assignee?:      string
+    category_ids?:  string  // comma-separated
+    from?:          string
+    to?:            string
   }>
 }
 
@@ -36,12 +36,18 @@ export default async function AdminTicketsPage({ searchParams }: Props) {
       assignee:profiles!tickets_assignee_id_fkey(id, email, first_name, last_name, avatar_url)
     `)
 
-  if (sp.status)      query = query.eq('status', sp.status)
-  if (sp.priority)    query = query.eq('priority', sp.priority)
-  if (sp.assignee)    query = query.eq('assignee_id', sp.assignee)
-  if (sp.category_id) query = query.eq('category_id', sp.category_id)
-  if (sp.from)        query = query.gte('created_at', sp.from)
-  if (sp.to)          query = query.lte('created_at', `${sp.to}T23:59:59`)
+  if (sp.statuses) {
+    const vals = sp.statuses.split(',').filter(Boolean)
+    if (vals.length > 0) query = query.in('status', vals)
+  }
+  if (sp.priority)     query = query.eq('priority', sp.priority)
+  if (sp.assignee)     query = query.eq('assignee_id', sp.assignee)
+  if (sp.category_ids) {
+    const ids = sp.category_ids.split(',').filter(Boolean)
+    if (ids.length > 0) query = query.in('category_id', ids)
+  }
+  if (sp.from)         query = query.gte('created_at', sp.from)
+  if (sp.to)           query = query.lte('created_at', `${sp.to}T23:59:59`)
   if (sp.q) {
     query = query.or(
       `subject.ilike.%${sp.q}%,display_id.ilike.%${sp.q}%`,

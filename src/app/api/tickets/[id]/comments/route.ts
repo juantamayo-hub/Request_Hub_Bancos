@@ -148,24 +148,48 @@ export async function POST(
     }
   }
 
-  // ─── Notify requester if public comment from someone else ────
+  // ─── Notify on public comments (bidirectional) ────────────────
   if (effectiveVisibility === 'public') {
     const { data: ticket } = await admin
       .from('tickets')
-      .select('display_id, subject, created_by, profiles!tickets_created_by_fkey(email)')
+      .select(`
+        display_id, subject, created_by, assignee_id,
+        requester:profiles!tickets_created_by_fkey(email),
+        assignee:profiles!tickets_assignee_id_fkey(email)
+      `)
       .eq('id', id)
       .single()
 
-    if (ticket && ticket.created_by !== profile.id) {
-      const rawP  = ticket.profiles as { email: string } | { email: string }[] | null
-      const email = rawP ? (Array.isArray(rawP) ? rawP[0]?.email : rawP.email) ?? '' : ''
-      if (email) {
+    if (ticket) {
+      const extractEmail = (rel: unknown): string => {
+        if (!rel) return ''
+        if (Array.isArray(rel)) return (rel[0] as { email?: string })?.email ?? ''
+        return (rel as { email?: string }).email ?? ''
+      }
+
+      const requesterEmail = extractEmail(ticket.requester)
+      const ownerEmail     = extractEmail(ticket.assignee)
+      const isRequester = profile.id === ticket.created_by
+
+      if (isRequester && ownerEmail) {
+        // Requester commented → notify the assigned owner
         await notifyNewComment({
           ticketId:       id,
           displayId:      ticket.display_id,
           subject:        ticket.subject,
           commentPreview: commentBody.trim(),
-          requesterEmail: email,
+          recipientEmail: ownerEmail,
+          isOwner:        true,
+        }).catch(console.error)
+      } else if (!isRequester && requesterEmail) {
+        // Owner or other admin commented → notify the requester
+        await notifyNewComment({
+          ticketId:       id,
+          displayId:      ticket.display_id,
+          subject:        ticket.subject,
+          commentPreview: commentBody.trim(),
+          recipientEmail: requesterEmail,
+          isOwner:        false,
         }).catch(console.error)
       }
     }

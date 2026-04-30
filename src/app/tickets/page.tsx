@@ -11,9 +11,9 @@ export const metadata: Metadata = { title: 'Mis Solicitudes' }
 
 interface Props {
   searchParams: Promise<{
-    category_id?: string
-    from?:        string
-    to?:          string
+    category_ids?: string  // comma-separated
+    from?:         string
+    to?:           string
   }>
 }
 
@@ -31,9 +31,12 @@ export default async function MyTicketsPage({ searchParams }: Props) {
       assignee:profiles!tickets_assignee_id_fkey(id, email, first_name, last_name, avatar_url)
     `)
 
-  if (sp.category_id) query = query.eq('category_id', sp.category_id)
-  if (sp.from)        query = query.gte('created_at', sp.from)
-  if (sp.to)          query = query.lte('created_at', `${sp.to}T23:59:59`)
+  if (sp.category_ids) {
+    const ids = sp.category_ids.split(',').filter(Boolean)
+    if (ids.length > 0) query = query.in('category_id', ids)
+  }
+  if (sp.from) query = query.gte('created_at', sp.from)
+  if (sp.to)   query = query.lte('created_at', `${sp.to}T23:59:59`)
 
   const [{ data: tickets }, { data: categories }] = await Promise.all([
     query.order('created_at', { ascending: false }),
@@ -58,7 +61,7 @@ export default async function MyTicketsPage({ searchParams }: Props) {
         </div>
 
         <TicketFilters
-          current={{ category_id: sp.category_id, from: sp.from, to: sp.to }}
+          current={{ category_ids: sp.category_ids, from: sp.from, to: sp.to }}
           categories={categories ?? []}
         />
 
