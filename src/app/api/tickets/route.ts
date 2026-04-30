@@ -139,8 +139,8 @@ export async function POST(request: NextRequest) {
       : Promise.resolve({ data: null }),
   ])
 
-  // ─── Notifications — true fire-and-forget (no await) ─────────
-  notifyTicketCreated({
+  // ─── Notifications — awaited so Vercel doesn't kill the promise ─
+  await notifyTicketCreated({
     ticketId:       ticket.id,
     displayId:      ticket.display_id,
     subject:        ticket.subject,
