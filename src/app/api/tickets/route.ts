@@ -117,26 +117,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Error al crear la solicitud' }, { status: 500 })
   }
 
-  // ─── Audit log ────────────────────────────────────────────────
-  await admin.from('audit_log').insert({
-    ticket_id:  ticket.id,
-    actor_id:   profile.id,
-    action:     'created',
-    from_value: null,
-    to_value:   ticket.status,
-    metadata:   { display_id: ticket.display_id },
-  })
-
-  // ─── Status history ───────────────────────────────────────────
-  await admin.from('ticket_status_history').insert({
-    ticket_id:  ticket.id,
-    status:     'new',
-    changed_by: profile.id,
-  })
-
-  // ─── Notifications (fire-and-forget) ─────────────────────────
   const categoryName = (rule as { categories?: { name: string } } | null)?.categories?.name ?? category_id
-  await notifyTicketCreated({
+
+  // ─── Parallel: audit log + status history + assignee profile ──
+  const [, , assigneeProfileRes] = await Promise.all([
+    admin.from('audit_log').insert({
+      ticket_id:  ticket.id,
+      actor_id:   profile.id,
+      action:     'created',
+      from_value: null,
+      to_value:   ticket.status,
+      metadata:   { display_id: ticket.display_id },
+    }),
+    admin.from('ticket_status_history').insert({
+      ticket_id:  ticket.id,
+      status:     'new',
+      changed_by: profile.id,
+    }),
+    assigneeId
+      ? admin.from('profiles').select('first_name, last_name, email').eq('id', assigneeId).single()
+      : Promise.resolve({ data: null }),
+  ])
+
+  // ─── Notifications — true fire-and-forget (no await) ─────────
+  notifyTicketCreated({
     ticketId:       ticket.id,
     displayId:      ticket.display_id,
     subject:        ticket.subject,
@@ -145,7 +149,7 @@ export async function POST(request: NextRequest) {
     assigneeEmail:  assigneeEmail ?? undefined,
   }).catch(console.error)
 
-  // ─── Pipedrive note + field updates (fire-and-forget) ────────
+  // ─── Pipedrive note + field updates — fire-and-forget ────────
   if (pipedrive_deal_id) {
     const ticketUrl    = `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/tickets/${ticket.id}`
     const assigneeLine = assigneeEmail ? `\nAsignado a: ${assigneeEmail}` : ''
@@ -163,23 +167,15 @@ export async function POST(request: NextRequest) {
       console.error('Pipedrive note error:', err),
     )
 
-    // 7.1 — fecha de reclamación
     const claimDate = new Date(ticket.created_at ?? Date.now()).toISOString().slice(0, 10)
     updateDealField(pipedrive_deal_id, FIELD_CLAIM_DATE, claimDate).catch(console.error)
 
-    // 7.2 — nombre del responsable del ticket
-    if (assigneeId) {
-      const { data: assigneeProfile } = await admin
-        .from('profiles')
-        .select('first_name, last_name, email')
-        .eq('id', assigneeId)
-        .single()
-      if (assigneeProfile) {
-        const assigneeName = assigneeProfile.first_name
-          ? `${assigneeProfile.first_name} ${assigneeProfile.last_name ?? ''}`.trim()
-          : assigneeProfile.email
-        updateDealField(pipedrive_deal_id, FIELD_CLAIM_OWNER, assigneeName).catch(console.error)
-      }
+    const assigneeProfile = assigneeProfileRes?.data
+    if (assigneeProfile) {
+      const assigneeName = assigneeProfile.first_name
+        ? `${assigneeProfile.first_name} ${assigneeProfile.last_name ?? ''}`.trim()
+        : assigneeProfile.email
+      updateDealField(pipedrive_deal_id, FIELD_CLAIM_OWNER, assigneeName).catch(console.error)
     }
   }
 

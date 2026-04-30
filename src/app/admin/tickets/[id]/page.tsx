@@ -68,31 +68,34 @@ export default async function AdminTicketDetailPage({ params }: Props) {
   const admins   = (adminsRes.data ?? []) as Pick<Profile, 'id' | 'email' | 'first_name' | 'last_name'>[]
   const feedback = feedbackRes.data as { satisfied: boolean; comment: string | null; created_at: string } | null
 
-  // Fetch attachments and generate signed URLs
+  // Fetch attachments + batch-sign all URLs in one storage call
   const adminClient = createAdminClient()
   const commentIds = (commentsRes.data ?? []).map((c: { id: string }) => c.id)
   const rawAttachments = commentIds.length > 0
     ? (await adminClient.from('comment_attachments').select('*').in('comment_id', commentIds)).data ?? []
     : []
 
-  const attachmentsByComment: Record<string, typeof rawAttachments> = {}
+  const allPaths = rawAttachments.map(a => a.file_path)
+  const { data: signedEntries } = allPaths.length > 0
+    ? await adminClient.storage.from('comment-attachments').createSignedUrls(allPaths, 3600)
+    : { data: [] }
+
+  const signedMap = Object.fromEntries(
+    (signedEntries ?? []).map(e => [e.path, e.signedUrl ?? '']),
+  )
+
+  const attachmentsByComment: Record<string, (typeof rawAttachments[number] & { signedUrl: string })[]> = {}
   for (const att of rawAttachments) {
     if (!attachmentsByComment[att.comment_id]) attachmentsByComment[att.comment_id] = []
-    attachmentsByComment[att.comment_id]!.push(att)
+    attachmentsByComment[att.comment_id]!.push({ ...att, signedUrl: signedMap[att.file_path] ?? '' })
   }
 
-  const comments: TicketCommentWithAuthor[] = await Promise.all(
-    (commentsRes.data ?? []).map(async (comment: Record<string, unknown>) => {
-      const atts = attachmentsByComment[comment.id as string] ?? []
-      const withUrls = await Promise.all(atts.map(async att => {
-        const { data } = await adminClient.storage
-          .from('comment-attachments')
-          .createSignedUrl(att.file_path, 3600)
-        return { ...att, signedUrl: data?.signedUrl ?? '' }
-      }))
-      return { ...comment, attachments: withUrls } as TicketCommentWithAuthor
-    })
-  )
+  const comments: TicketCommentWithAuthor[] = (commentsRes.data ?? []).map(
+    (comment: Record<string, unknown>) => ({
+      ...comment,
+      attachments: attachmentsByComment[comment.id as string] ?? [],
+    }),
+  ) as TicketCommentWithAuthor[]
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#FAFAF8' }}>

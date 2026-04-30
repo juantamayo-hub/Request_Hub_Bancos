@@ -23,53 +23,56 @@ export default async function TicketDetailPage({ params }: Props) {
   const profile  = await requireProfile()
   const supabase = await createClient()
 
-  // RLS ensures users only see their own tickets; admins see all.
-  const { data: ticket } = await supabase
-    .from('tickets')
-    .select(`
-      *,
-      categories(id, name),
-      profiles!tickets_created_by_fkey(id, email, first_name, last_name, avatar_url),
-      assignee:profiles!tickets_assignee_id_fkey(id, email, first_name, last_name, avatar_url)
-    `)
-    .eq('id', id)
-    .single()
+  const adminClient = createAdminClient()
+
+  // Fetch ticket + comments in parallel
+  const [{ data: ticket }, { data: rawComments }] = await Promise.all([
+    supabase
+      .from('tickets')
+      .select(`
+        *,
+        categories(id, name),
+        profiles!tickets_created_by_fkey(id, email, first_name, last_name, avatar_url),
+        assignee:profiles!tickets_assignee_id_fkey(id, email, first_name, last_name, avatar_url)
+      `)
+      .eq('id', id)
+      .single(),
+
+    // RLS also filters internal comments for non-admins.
+    supabase
+      .from('ticket_comments')
+      .select(`*, profiles(id, email, first_name, last_name, avatar_url)`)
+      .eq('ticket_id', id)
+      .order('created_at', { ascending: true }),
+  ])
 
   if (!ticket) notFound()
 
-  // RLS also filters internal comments for non-admins.
-  const { data: rawComments } = await supabase
-    .from('ticket_comments')
-    .select(`*, profiles(id, email, first_name, last_name, avatar_url)`)
-    .eq('ticket_id', id)
-    .order('created_at', { ascending: true })
-
-  // Fetch attachments and generate signed URLs (service-role bypasses RLS)
-  const adminClient = createAdminClient()
+  // Fetch attachments + batch-sign all URLs in one storage call
   const commentIds = (rawComments ?? []).map(c => c.id)
   const rawAttachments = commentIds.length > 0
     ? (await adminClient.from('comment_attachments').select('*').in('comment_id', commentIds)).data ?? []
     : []
 
-  const attachmentsByComment: Record<string, typeof rawAttachments> = {}
+  const allPaths = rawAttachments.map(a => a.file_path)
+  const { data: signedEntries } = allPaths.length > 0
+    ? await adminClient.storage.from('comment-attachments').createSignedUrls(allPaths, 3600)
+    : { data: [] }
+
+  const signedMap = Object.fromEntries(
+    (signedEntries ?? []).map(e => [e.path, e.signedUrl ?? '']),
+  )
+
+  const attachmentsByComment: Record<string, (typeof rawAttachments[number] & { signedUrl: string })[]> = {}
   for (const att of rawAttachments) {
     if (!attachmentsByComment[att.comment_id]) attachmentsByComment[att.comment_id] = []
-    attachmentsByComment[att.comment_id]!.push(att)
+    attachmentsByComment[att.comment_id]!.push({ ...att, signedUrl: signedMap[att.file_path] ?? '' })
   }
 
-  // Generate signed URLs for all attachments
-  const comments: TicketCommentWithAuthor[] = await Promise.all(
-    (rawComments ?? []).map(async comment => {
-      const atts = attachmentsByComment[comment.id] ?? []
-      const withUrls = await Promise.all(atts.map(async att => {
-        const { data } = await adminClient.storage
-          .from('comment-attachments')
-          .createSignedUrl(att.file_path, 3600)  // 1 hour
-        return { ...att, signedUrl: data?.signedUrl ?? '' }
-      }))
-      return { ...comment, attachments: withUrls } as TicketCommentWithAuthor
-    })
-  )
+  const comments: TicketCommentWithAuthor[] = (rawComments ?? []).map(comment => ({
+    ...comment,
+    attachments: attachmentsByComment[comment.id] ?? [],
+  })) as TicketCommentWithAuthor[]
 
   const t = ticket as TicketWithRelations
 
