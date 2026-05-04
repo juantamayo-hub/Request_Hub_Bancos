@@ -2,6 +2,7 @@ import { NextRequest, NextResponse }                    from 'next/server'
 import { createAdminClient }                            from '@/lib/supabase/admin'
 import { fetchOpenDealsInStage, fetchDealStageId, updateDealField, FIELD_DEAL_SUMMARY } from '@/lib/pipedrive'
 import { postSlackDM, buildCronSummaryMessage }         from '@/lib/notifications/slack'
+import { isConfigured, listSheetNames, fetchDealScoringData, DealScoringData } from '@/lib/sheets'
 
 // ── Vercel Cron config ────────────────────────────────────────
 // Schedule defined in vercel.json: "0 6,12 * * 1-5"
@@ -94,6 +95,32 @@ function derivePriority(rule: OverdueRule, hours: number): 'high' | 'medium' {
   return hours <= highCeiling ? 'high' : 'medium'
 }
 
+// Score = 0.8 × (prob / 0.50) + 0.2 × (revenue / maxRevenue)
+// High: >= 0.05 | Medium: >= 0.008 | Low: < 0.008
+// Returns null when deal is not found in scoring data (caller falls back to time-based).
+function derivePriorityFromScore(
+  dealId: number,
+  scoring: DealScoringData | null,
+): 'high' | 'medium' | 'low' | null {
+  if (!scoring) return null
+
+  const prob    = scoring.probabilityByDealId.get(dealId)
+  const revenue = scoring.revenueByDealId.get(dealId)
+
+  if (prob === undefined && revenue === undefined) return null
+
+  const probScore    = prob    !== undefined ? Math.min(prob / 0.50, 1) * 0.8 : 0
+  const revenueScore = (revenue !== undefined && scoring.maxRevenue > 0)
+    ? (revenue / scoring.maxRevenue) * 0.2
+    : 0
+
+  const score = probScore + revenueScore
+
+  if (score >= 0.05) return 'high'
+  if (score >= 0.008) return 'medium'
+  return 'low'
+}
+
 function formatDuration(hours: number): string {
   const days = Math.floor(hours / 24)
   const rem  = Math.floor(hours % 24)
@@ -124,6 +151,18 @@ export async function GET(request: NextRequest) {
   }
 
   const categoryMap = new Map(cats.map(c => [c.name, c.id as string]))
+
+  // ── Load scoring data from Google Sheets (optional) ───────────
+  let scoringData: DealScoringData | null = null
+  if (isConfigured()) {
+    try {
+      const sheetNames = await listSheetNames()
+      scoringData = await fetchDealScoringData(sheetNames)
+      console.log('[cron] scoring data loaded from Sheets')
+    } catch (err) {
+      console.warn('[cron] failed to load scoring data from Sheets (falling back to time-based priority):', err)
+    }
+  }
 
   // ── Pass 1: Snooze re-open ────────────────────────────────────
   {
@@ -362,13 +401,15 @@ export async function GET(request: NextRequest) {
         `Ticket generado automáticamente por Request Hub Bancos.`,
       ].join('\n')
 
+      const scorePriority = derivePriorityFromScore(dealId, scoringData)
+
       return {
         created_by:        null,
         assignee_id:       assigneeId,
         category_id:       categoryId,
         subject:           `[Auto] ${rule.categoryName} – Deal #${dealId} – ${bankName}`,
         description,
-        priority:          derivePriority(rule, hours),
+        priority:          scorePriority ?? derivePriority(rule, hours),
         status:            'new' as const,
         sla_hours:         48,
         sla_deadline:      slaDeadline,

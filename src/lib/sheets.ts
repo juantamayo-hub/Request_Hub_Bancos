@@ -153,6 +153,75 @@ export async function fetchVolumeByBank(year: number, sheetNames: string[]): Pro
     .sort((a, b) => b.fein - a.fein)
 }
 
+export interface DealScoringData {
+  revenueByDealId:     Map<number, number>
+  probabilityByDealId: Map<number, number>
+  maxRevenue:          number
+}
+
+/**
+ * Reads deal-level probability and potential revenue from the RAW DATA sheet.
+ * Finds columns by header title (row 1 = headers, rows 2+ = data).
+ * Keyed by Pipedrive deal ID.
+ */
+export async function fetchDealScoringData(sheetNames: string[]): Promise<DealScoringData> {
+  const empty: DealScoringData = { revenueByDealId: new Map(), probabilityByDealId: new Map(), maxRevenue: 0 }
+
+  const sheet = findSheet(sheetNames, 'raw data', 'bank area')
+  if (!sheet) {
+    console.warn('[sheets] RAW DATA sheet not found for scoring. Available:', sheetNames)
+    return empty
+  }
+
+  const rows = await readRange(`${quoteSheet(sheet)}!A1:Z`)
+  if (rows.length < 2) return empty
+
+  // Row 0 = headers
+  const headers = rows[0].map(h => String(h ?? '').trim().toLowerCase())
+
+  // Find column indices by partial header match
+  const dealIdCol  = headers.findIndex(h => h.includes('deal') && (h.includes('id') || h.includes('número')))
+  const probCol    = headers.findIndex(h => h.includes('probability') || h.includes('probabilidad'))
+  const revenueCol = headers.findIndex(h => h.includes('potential revenue') || h.includes('revenue to bntage') || h.includes('revenue'))
+
+  if (dealIdCol === -1) {
+    console.warn('[sheets] Deal ID column not found in RAW DATA headers:', rows[0])
+    return empty
+  }
+
+  const revenueByDealId     = new Map<number, number>()
+  const probabilityByDealId = new Map<number, number>()
+  let maxRevenue = 0
+
+  for (const row of rows.slice(1)) {
+    const rawId = row[dealIdCol]
+    const dealId = typeof rawId === 'number' ? rawId : parseInt(String(rawId ?? ''), 10)
+    if (!dealId || isNaN(dealId)) continue
+
+    if (probCol !== -1) {
+      const raw = row[probCol]
+      const val = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''))
+      if (!isNaN(val) && val > 0) {
+        // Store as a fraction (e.g., 0.12 for 12%). Sheet may store as % (12) or fraction (0.12).
+        const prob = val > 1 ? val / 100 : val
+        probabilityByDealId.set(dealId, prob)
+      }
+    }
+
+    if (revenueCol !== -1) {
+      const raw = row[revenueCol]
+      const val = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''))
+      if (!isNaN(val) && val > 0) {
+        revenueByDealId.set(dealId, val)
+        if (val > maxRevenue) maxRevenue = val
+      }
+    }
+  }
+
+  console.log(`[sheets] scoring data loaded: ${probabilityByDealId.size} deals with probability, ${revenueByDealId.size} with revenue, maxRevenue=${maxRevenue}`)
+  return { revenueByDealId, probabilityByDealId, maxRevenue }
+}
+
 export interface ConversionByBank {
   bankName:    string
   borToVal:    number | null
