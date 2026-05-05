@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse }                    from 'next/server'
 import { createAdminClient }                            from '@/lib/supabase/admin'
-import { fetchOpenDealsInStage, fetchDealStageId, updateDealField, FIELD_DEAL_SUMMARY } from '@/lib/pipedrive'
+import { fetchOpenDealsInStage, updateDealField, FIELD_DEAL_SUMMARY, type StageDeal } from '@/lib/pipedrive'
 import { postSlackDM, buildCronSummaryMessage }         from '@/lib/notifications/slack'
 import { isConfigured, listSheetNames, fetchDealScoringData, DealScoringData } from '@/lib/sheets'
 
@@ -203,7 +203,38 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // ── Pre-fetch open deals per stage (reused in Pass 2 + Pass 3) ─
+  // This replaces N individual fetchDealStageId() calls with 3 bulk stage fetches,
+  // avoiding Pipedrive rate-limit issues and drastically reducing API usage.
+  console.log('[cron] starting Pipedrive stage fetches', new Date().toISOString())
+  const openDealsPerStage = new Map<number, StageDeal[]>()
+  const stageResults = await Promise.all(
+    OVERDUE_RULES.map(async rule => {
+      const categoryId = categoryMap.get(rule.categoryName)
+      if (!categoryId) return { rule, categoryId: null, deals: [] as StageDeal[] }
+      try {
+        const t0 = Date.now()
+        const deals = await fetchOpenDealsInStage(rule.stageId)
+        console.log(`[cron] stage ${rule.stageId} fetched ${deals.length} deals in ${Date.now() - t0}ms`)
+        openDealsPerStage.set(rule.stageId, deals)
+        return { rule, categoryId, deals }
+      } catch (err) {
+        console.error(`[cron] fetchOpenDealsInStage(${rule.stageId}) failed:`, err)
+        return { rule, categoryId, deals: null as StageDeal[] | null }
+      }
+    })
+  )
+  console.log('[cron] Pipedrive stage fetches done', new Date().toISOString())
+
+  // Build deal-ID sets per trigger stage for fast O(1) lookup
+  const dealIdsInStage = new Map<number, Set<number>>()
+  for (const [stageId, deals] of openDealsPerStage.entries()) {
+    dealIdsInStage.set(stageId, new Set(deals.map(d => d.id)))
+  }
+
   // ── Pass 2: Auto-close tickets whose deal has progressed ─────
+  // Logic: if the deal is no longer among the open deals in its trigger stage,
+  // the deal has advanced (or was won/lost) and the ticket can be closed.
   {
     // Fetch all relevant category IDs (system + non-system)
     const { data: allCats } = await admin
@@ -214,6 +245,13 @@ export async function GET(request: NextRequest) {
     if (allCats && allCats.length > 0) {
       const allCatMap = new Map(allCats.map(c => [c.name, c.id as string]))
 
+      // Build category id → trigger stage map
+      const catTriggerMap = new Map<string, number>()
+      for (const rule of AUTO_CLOSE_RULES) {
+        const catId = allCatMap.get(rule.categoryName)
+        if (catId) catTriggerMap.set(catId, rule.triggerStage)
+      }
+
       // Fetch open tickets for these categories with a deal ID
       const catIds = allCats.map(c => c.id as string)
       const { data: openTickets } = await admin
@@ -223,71 +261,60 @@ export async function GET(request: NextRequest) {
         .in('status', ['new', 'in_progress', 'waiting_on_employee'])
         .not('pipedrive_deal_id', 'is', null)
 
-      if (openTickets && openTickets.length > 0) {
-        // Fetch current stage for all deals in parallel
-        const dealIds = [...new Set(openTickets.map(t => t.pipedrive_deal_id as number))]
-        const stageMap = new Map<number, number | null>()
-        await Promise.all(
-          dealIds.map(async dealId => {
-            const stage = await fetchDealStageId(dealId)
-            stageMap.set(dealId, stage)
+      let autoClosedCount = 0
+      for (const ticket of openTickets ?? []) {
+        const triggerStage = catTriggerMap.get(ticket.category_id as string)
+        if (triggerStage === undefined) continue
+
+        const idsInTriggerStage = dealIdsInStage.get(triggerStage)
+        // If we successfully fetched the stage list and the deal is still there → keep open
+        if (idsInTriggerStage && idsInTriggerStage.has(ticket.pipedrive_deal_id as number)) continue
+        // Deal is no longer in trigger stage (advanced, won, or lost) → close
+        // Skip if we don't have data for this trigger stage (fetch failed) to avoid false closes
+        if (!idsInTriggerStage) continue
+
+        // Close this ticket
+        await admin.from('tickets').update({ status: 'closed' }).eq('id', ticket.id)
+        autoClosedCount++
+
+        // Fetch last public comment for deal summary
+        const { data: lastComment } = await admin
+          .from('ticket_comments')
+          .select('body')
+          .eq('ticket_id', ticket.id)
+          .eq('visibility', 'public')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+
+        await Promise.all([
+          admin.from('audit_log').insert({
+            ticket_id:  ticket.id,
+            actor_id:   '00000000-0000-0000-0000-000000000000',
+            action:     'status_changed',
+            from_value: ticket.status as string,
+            to_value:   'closed',
+            metadata:   { auto: true, reason: 'deal_left_trigger_stage', triggerStage },
           }),
-        )
+          admin.from('ticket_status_history').insert({
+            ticket_id:  ticket.id,
+            status:     'closed',
+            changed_by: '00000000-0000-0000-0000-000000000000',
+          }),
+          admin.from('ticket_comments').insert({
+            ticket_id:  ticket.id,
+            author_id:  '00000000-0000-0000-0000-000000000000',
+            body:       `Ticket cerrado automáticamente. El deal ya no está en el stage de origen (${triggerStage}).`,
+            visibility: 'internal',
+          }),
+        ])
 
-        // Build category id → trigger stage map
-        const catTriggerMap = new Map<string, number>()
-        for (const rule of AUTO_CLOSE_RULES) {
-          const catId = allCatMap.get(rule.categoryName)
-          if (catId) catTriggerMap.set(catId, rule.triggerStage)
+        if (lastComment?.body && ticket.pipedrive_deal_id) {
+          updateDealField(ticket.pipedrive_deal_id as number, FIELD_DEAL_SUMMARY, lastComment.body).catch(console.error)
         }
-
-        for (const ticket of openTickets) {
-          const triggerStage = catTriggerMap.get(ticket.category_id as string)
-          if (triggerStage === undefined) continue
-          const currentStage = stageMap.get(ticket.pipedrive_deal_id as number)
-          if (currentStage === null || currentStage === undefined) continue
-          if (!isPastStage(currentStage, triggerStage)) continue
-
-          // Close this ticket
-          await admin.from('tickets').update({ status: 'closed' }).eq('id', ticket.id)
-
-          // Fetch last public comment for deal summary
-          const { data: lastComment } = await admin
-            .from('ticket_comments')
-            .select('body')
-            .eq('ticket_id', ticket.id)
-            .eq('visibility', 'public')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single()
-
-          await Promise.all([
-            admin.from('audit_log').insert({
-              ticket_id:  ticket.id,
-              actor_id:   '00000000-0000-0000-0000-000000000000',
-              action:     'status_changed',
-              from_value: ticket.status as string,
-              to_value:   'closed',
-              metadata:   { auto: true, reason: 'deal_stage_progressed', stage: currentStage },
-            }),
-            admin.from('ticket_status_history').insert({
-              ticket_id:  ticket.id,
-              status:     'closed',
-              changed_by: '00000000-0000-0000-0000-000000000000',
-            }),
-            admin.from('ticket_comments').insert({
-              ticket_id:  ticket.id,
-              author_id:  '00000000-0000-0000-0000-000000000000',
-              body:       `Ticket cerrado automáticamente. El deal ha avanzado al stage ${currentStage}.`,
-              visibility: 'internal',
-            }),
-          ])
-
-          // 7.4 — deal summary
-          if (lastComment?.body && ticket.pipedrive_deal_id) {
-            updateDealField(ticket.pipedrive_deal_id as number, FIELD_DEAL_SUMMARY, lastComment.body).catch(console.error)
-          }
-        }
+      }
+      if (autoClosedCount > 0) {
+        console.log(`[cron] auto-close: closed ${autoClosedCount} tickets`)
       }
     }
   }
@@ -297,25 +324,6 @@ export async function GET(request: NextRequest) {
 
   // Per-assignee summary: email → [{ categoryName, count }]
   const assigneeSummaries = new Map<string, Array<{ categoryName: string; count: number }>>()
-
-  // Fetch all stages from Pipedrive in parallel
-  console.log('[cron] starting Pipedrive fetches', new Date().toISOString())
-  const stageResults = await Promise.all(
-    OVERDUE_RULES.map(async rule => {
-      const categoryId = categoryMap.get(rule.categoryName)
-      if (!categoryId) return { rule, categoryId: null, deals: [] }
-      try {
-        const t0 = Date.now()
-        const deals = await fetchOpenDealsInStage(rule.stageId)
-        console.log(`[cron] stage ${rule.stageId} fetched ${deals.length} deals in ${Date.now() - t0}ms`)
-        return { rule, categoryId, deals }
-      } catch (err) {
-        console.error(`[cron] fetchOpenDealsInStage(${rule.stageId}) failed:`, err)
-        return { rule, categoryId, deals: null }
-      }
-    })
-  )
-  console.log('[cron] Pipedrive fetches done', new Date().toISOString())
 
   for (const { rule, categoryId, deals } of stageResults) {
     if (!categoryId) {

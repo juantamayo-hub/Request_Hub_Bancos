@@ -18,6 +18,7 @@ interface Props {
     category_ids?:  string  // comma-separated
     from?:          string
     to?:            string
+    source?:        string  // '' | 'system' | 'manual'
   }>
 }
 
@@ -48,6 +49,8 @@ export default async function AdminTicketsPage({ searchParams }: Props) {
   }
   if (sp.from)         query = query.gte('created_at', sp.from)
   if (sp.to)           query = query.lte('created_at', `${sp.to}T23:59:59`)
+  if (sp.source === 'system') query = query.is('created_by', null)
+  if (sp.source === 'manual') query = query.not('created_by', 'is', null)
   if (sp.q) {
     query = query.or(
       `subject.ilike.%${sp.q}%,display_id.ilike.%${sp.q}%`,

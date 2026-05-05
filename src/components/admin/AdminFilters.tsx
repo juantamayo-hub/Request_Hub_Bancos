@@ -26,6 +26,7 @@ interface Props {
     category_ids?:  string  // comma-separated category IDs
     from?:          string
     to?:            string
+    source?:        string  // '' | 'system' | 'manual'
   }
   admins:      AdminOption[]
   categories?: CategoryOption[]
@@ -35,7 +36,7 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
   const router   = useRouter()
   const pathname = usePathname()
   const params   = useSearchParams()
-  const [, startTransition] = useTransition()
+  const [isPending, startTransition] = useTransition()
 
   // ─── Dropdown open state ──────────────────────────────────────
   const [catOpen, setCatOpen]       = useState(false)
@@ -127,10 +128,18 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
 
   const clear = () => startTransition(() => router.replace(pathname))
 
-  const hasFilters = !!(current.statuses || current.priority || current.q || current.assignee || current.category_ids || current.from || current.to)
+  const hasFilters = !!(current.statuses || current.priority || current.q || current.assignee || current.category_ids || current.from || current.to || current.source)
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
+      {/* Loading indicator */}
+      {isPending && (
+        <span className="flex items-center gap-1.5 text-xs text-gray-400 select-none">
+          <span className="inline-block h-3 w-3 animate-spin rounded-full border border-gray-400 border-t-transparent" />
+          Cargando…
+        </span>
+      )}
+
       {/* Search with debounce */}
       <input
         type="search"
@@ -255,6 +264,17 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
           ))}
         </select>
       )}
+
+      {/* Source filter */}
+      <select
+        value={current.source ?? ''}
+        onChange={e => update('source', e.target.value)}
+        className="h-8 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+      >
+        <option value="">Todos los tickets</option>
+        <option value="system">Solo sistema</option>
+        <option value="manual">Solo gestores</option>
+      </select>
 
       {hasFilters && (
         <button onClick={clear} className="text-sm text-gray-400 hover:text-gray-700 transition-colors">
