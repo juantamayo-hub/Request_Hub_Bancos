@@ -47,7 +47,7 @@ export function CommentThread({ comments, currentProfileId, isAdmin = false }: P
           >
             {/* Header */}
             <div className="flex items-center gap-2 mb-2">
-              {comment.profiles.avatar_url ? (
+              {comment.profiles?.avatar_url ? (
                 <Image
                   src={comment.profiles.avatar_url}
                   alt=""
@@ -57,12 +57,14 @@ export function CommentThread({ comments, currentProfileId, isAdmin = false }: P
                 />
               ) : (
                 <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs font-medium text-gray-600">
-                  {(comment.profiles.first_name?.[0] ?? comment.profiles.email[0]).toUpperCase()}
+                  {comment.profiles
+                    ? (comment.profiles.first_name?.[0] ?? comment.profiles.email[0]).toUpperCase()
+                    : '?'}
                 </div>
               )}
 
               <span className="font-medium text-gray-800">
-                {displayName(comment.profiles)}
+                {comment.profiles ? displayName(comment.profiles) : 'Sistema'}
                 {isMine && <span className="text-gray-400 font-normal"> (you)</span>}
               </span>
 
