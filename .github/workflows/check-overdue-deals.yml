@@ -10,10 +10,22 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 12
     steps:
-      - name: Trigger overdue deal check
+      - name: Trigger overdue deal checks by stage
         run: |
-          curl -f --location-trusted -X GET \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.APP_URL }}/api/cron/check-overdue-deals"
+          set -euo pipefail
+
+          call() {
+            local path="$1"
+            echo "Triggering ${path}"
+            curl -f --location-trusted --retry 2 --retry-delay 3 --max-time 120 -X GET \
+              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+              "${{ secrets.APP_URL }}${path}"
+            echo
+          }
+
+          call "/api/cron/check-overdue-deals?stageId=70"
+          call "/api/cron/check-overdue-deals?stageId=72"
+          call "/api/cron/check-overdue-deals?stageId=73"
+          call "/api/cron/check-overdue-deals?mode=autoclose"

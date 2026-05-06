@@ -128,33 +128,79 @@ function formatDuration(hours: number): string {
   return rem > 0 ? `${days} días y ${rem}h` : `${days} días`
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`timeout_${ms}ms`)), ms)),
+  ])
+}
+
 // ── Cron handler ──────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
+  const startedAt = Date.now()
+
   // Verify Vercel Cron secret (set CRON_SECRET in Vercel env vars)
   const auth = request.headers.get('authorization')
   if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const admin = createAdminClient()
+  const stageIdParam = request.nextUrl.searchParams.get('stageId')
+  const modeParam    = request.nextUrl.searchParams.get('mode')
+  const runMode      = modeParam ?? 'full'
 
-  // Load all system categories (name → id)
-  const { data: cats, error: catsErr } = await admin
-    .from('categories')
-    .select('id, name')
-    .eq('is_system', true)
-
-  if (catsErr || !cats?.length) {
-    console.error('[cron] failed to load system categories:', catsErr)
-    return NextResponse.json({ error: 'System categories not found' }, { status: 500 })
+  if (modeParam && modeParam !== 'autoclose') {
+    return NextResponse.json({ error: 'Invalid mode. Use mode=autoclose.' }, { status: 400 })
   }
 
-  const categoryMap = new Map(cats.map(c => [c.name, c.id as string]))
+  if (modeParam === 'autoclose' && stageIdParam) {
+    return NextResponse.json({ error: 'stageId is not compatible with mode=autoclose.' }, { status: 400 })
+  }
+
+  let selectedStageId: number | null = null
+  if (stageIdParam) {
+    const parsedStageId = Number(stageIdParam)
+    if (!Number.isInteger(parsedStageId) || parsedStageId <= 0) {
+      return NextResponse.json({ error: 'Invalid stageId.' }, { status: 400 })
+    }
+    selectedStageId = parsedStageId
+  }
+  if (stageIdParam && selectedStageId === null) {
+    return NextResponse.json({ error: 'Invalid stageId.' }, { status: 400 })
+  }
+
+  const admin = createAdminClient()
+  const isAutoCloseOnly = runMode === 'autoclose'
+  const shouldCreateOverdueTickets = !isAutoCloseOnly
+
+  const targetRules = selectedStageId === null
+    ? OVERDUE_RULES
+    : OVERDUE_RULES.filter(rule => rule.stageId === selectedStageId)
+
+  if (selectedStageId !== null && targetRules.length === 0) {
+    return NextResponse.json({ error: `Unsupported stageId: ${selectedStageId}` }, { status: 400 })
+  }
+
+  const categoryMap = new Map<string, string>()
+  if (shouldCreateOverdueTickets) {
+    // Load all system categories (name → id)
+    const { data: cats, error: catsErr } = await admin
+      .from('categories')
+      .select('id, name')
+      .eq('is_system', true)
+
+    if (catsErr || !cats?.length) {
+      console.error('[cron] failed to load system categories:', catsErr)
+      return NextResponse.json({ error: 'System categories not found' }, { status: 500 })
+    }
+
+    for (const cat of cats) categoryMap.set(cat.name, cat.id as string)
+  }
 
   // ── Load scoring data from Google Sheets (optional) ───────────
   let scoringData: DealScoringData | null = null
-  if (isConfigured()) {
+  if (shouldCreateOverdueTickets && isConfigured()) {
     try {
       const sheetNames = await listSheetNames()
       scoringData = await fetchDealScoringData(sheetNames)
@@ -165,9 +211,11 @@ export async function GET(request: NextRequest) {
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+  let reopenedCount = 0
+  let autoClosedCount = 0
 
   // ── Pass 1: Snooze re-open ────────────────────────────────────
-  {
+  if (!shouldCreateOverdueTickets || selectedStageId === null) {
     const { data: snoozedTickets } = await admin
       .from('tickets')
       .select(`
@@ -216,6 +264,7 @@ export async function GET(request: NextRequest) {
           : Promise.resolve(),
       ])
     }
+    reopenedCount = (snoozedTickets ?? []).length
     if ((snoozedTickets ?? []).length > 0) {
       console.log(`[cron] snooze-reopen: reopened ${snoozedTickets!.length} tickets`)
     }
@@ -226,10 +275,11 @@ export async function GET(request: NextRequest) {
   // avoiding Pipedrive rate-limit issues and drastically reducing API usage.
   console.log('[cron] starting Pipedrive stage fetches', new Date().toISOString())
   const openDealsPerStage = new Map<number, StageDeal[]>()
+  const stageFetchRules = isAutoCloseOnly ? OVERDUE_RULES : targetRules
   const stageResults = await Promise.all(
-    OVERDUE_RULES.map(async rule => {
-      const categoryId = categoryMap.get(rule.categoryName)
-      if (!categoryId) return { rule, categoryId: null, deals: [] as StageDeal[] }
+    stageFetchRules.map(async rule => {
+      const categoryId = shouldCreateOverdueTickets ? (categoryMap.get(rule.categoryName) ?? null) : null
+      if (shouldCreateOverdueTickets && !categoryId) return { rule, categoryId: null, deals: [] as StageDeal[] }
       try {
         const t0 = Date.now()
         const deals = await fetchOpenDealsInStage(rule.stageId)
@@ -253,7 +303,7 @@ export async function GET(request: NextRequest) {
   // ── Pass 2: Auto-close tickets whose deal has progressed ─────
   // Logic: if the deal is no longer among the open deals in its trigger stage,
   // the deal has advanced (or was won/lost) and the ticket can be closed.
-  {
+  if (!shouldCreateOverdueTickets || selectedStageId === null) {
     // Fetch all relevant category IDs (system + non-system)
     const { data: allCats } = await admin
       .from('categories')
@@ -279,7 +329,7 @@ export async function GET(request: NextRequest) {
         .in('status', ['new', 'in_progress', 'waiting_on_employee'])
         .not('pipedrive_deal_id', 'is', null)
 
-      let autoClosedCount = 0
+      let autoClosedCountRun = 0
       for (const ticket of openTickets ?? []) {
         const triggerStage = catTriggerMap.get(ticket.category_id as string)
         if (triggerStage === undefined) continue
@@ -293,7 +343,7 @@ export async function GET(request: NextRequest) {
 
         // Close this ticket
         await admin.from('tickets').update({ status: 'closed' }).eq('id', ticket.id)
-        autoClosedCount++
+        autoClosedCountRun++
 
         // Fetch last public comment for deal summary
         const { data: lastComment } = await admin
@@ -331,8 +381,9 @@ export async function GET(request: NextRequest) {
           updateDealField(ticket.pipedrive_deal_id as number, FIELD_DEAL_SUMMARY, lastComment.body).catch(console.error)
         }
       }
-      if (autoClosedCount > 0) {
-        console.log(`[cron] auto-close: closed ${autoClosedCount} tickets`)
+      autoClosedCount = autoClosedCountRun
+      if (autoClosedCountRun > 0) {
+        console.log(`[cron] auto-close: closed ${autoClosedCountRun} tickets`)
       }
     }
   }
@@ -344,6 +395,7 @@ export async function GET(request: NextRequest) {
   const assigneeSummaries = new Map<string, Array<{ categoryName: string; count: number }>>()
 
   for (const { rule, categoryId, deals } of stageResults) {
+    if (!shouldCreateOverdueTickets) break
     if (!categoryId) {
       summary.push(`SKIP ${rule.categoryName}: not in DB`)
       continue
@@ -475,15 +527,40 @@ export async function GET(request: NextRequest) {
     const timeLabel = new Date().toLocaleTimeString('es-ES', {
       hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid',
     })
-    await Promise.all(
-      Array.from(assigneeSummaries.entries()).map(([email, cats]) => {
+    const dmResults = await Promise.allSettled(
+      Array.from(assigneeSummaries.entries()).map(async ([email, cats]) => {
         const total = cats.reduce((s, c) => s + c.count, 0)
-        return postSlackDM(email, buildCronSummaryMessage({ timeLabel, appUrl, categories: cats.map(c => ({ name: c.categoryName, count: c.count })), total }))
+        return withTimeout(
+          postSlackDM(
+            email,
+            buildCronSummaryMessage({
+              timeLabel,
+              appUrl,
+              categories: cats.map(c => ({ name: c.categoryName, count: c.count })),
+              total,
+            }),
+          ),
+          3000,
+        )
       }),
     )
+    const failedDmCount = dmResults.filter(r => r.status === 'rejected').length
+    if (failedDmCount > 0) {
+      console.warn(`[cron] failed to send ${failedDmCount} Slack summary DMs`)
+    }
   }
 
-  const result = { ok: true, totalCreated, summary, runAt: new Date().toISOString() }
+  const result = {
+    ok: true,
+    mode: isAutoCloseOnly ? 'autoclose' : (selectedStageId === null ? 'full' : `stage:${selectedStageId}`),
+    processedStages: stageFetchRules.map(r => r.stageId),
+    totalCreated,
+    reopenedCount,
+    autoClosedCount,
+    summary,
+    durationMs: Date.now() - startedAt,
+    runAt: new Date().toISOString(),
+  }
   console.log('[cron/check-overdue-deals]', JSON.stringify(result))
   return NextResponse.json(result)
 }
