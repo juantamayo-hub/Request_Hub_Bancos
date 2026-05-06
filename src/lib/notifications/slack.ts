@@ -349,6 +349,36 @@ export function buildCronSummaryMessage(p: {
 }
 
 /**
+ * DM sent to the assignee when a snoozed ticket is automatically reopened.
+ */
+export function buildSnoozeReopenedMessage(p: {
+  displayId: string
+  subject:   string
+  ticketId:  string
+  appUrl:    string
+}): SlackMessage {
+  const url = `${p.appUrl}/admin/tickets/${p.ticketId}`
+  return {
+    text: `Ticket ${p.displayId} reabierto (snooze expirado)`,
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `:alarm_clock: *Ticket reabierto automáticamente*\n*${p.displayId}* — ${p.subject}\n\nEl periodo de posponer ha expirado. El ticket está activo de nuevo.`,
+        },
+        accessory: {
+          type:  'button',
+          style: 'primary',
+          text:  { type: 'plain_text', text: 'Ver Ticket' },
+          url,
+        },
+      },
+    ],
+  }
+}
+
+/**
  * DM sent to the requester when their ticket is cancelled.
  * Includes the cancellation reason provided by the admin.
  */

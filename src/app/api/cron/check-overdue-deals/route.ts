@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse }                    from 'next/server'
 import { createAdminClient }                            from '@/lib/supabase/admin'
 import { fetchOpenDealsInStage, updateDealField, FIELD_DEAL_SUMMARY, type StageDeal } from '@/lib/pipedrive'
-import { postSlackDM, buildCronSummaryMessage }         from '@/lib/notifications/slack'
+import { postSlackDM, buildCronSummaryMessage, buildSnoozeReopenedMessage } from '@/lib/notifications/slack'
 import { isConfigured, listSheetNames, fetchDealScoringData, DealScoringData } from '@/lib/sheets'
 
 // ── Vercel Cron config ────────────────────────────────────────
@@ -164,11 +164,16 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+
   // ── Pass 1: Snooze re-open ────────────────────────────────────
   {
     const { data: snoozedTickets } = await admin
       .from('tickets')
-      .select('id, snoozed_until, snooze_previous_status')
+      .select(`
+        id, snoozed_until, snooze_previous_status, display_id, subject,
+        assignee:profiles!tickets_assignee_id_fkey(email)
+      `)
       .eq('status', 'closed')
       .not('snoozed_until', 'is', null)
       .lte('snoozed_until', new Date().toISOString())
@@ -180,6 +185,11 @@ export async function GET(request: NextRequest) {
         snoozed_until:          null,
         snooze_previous_status: null,
       }).eq('id', t.id)
+
+      const assigneeRaw   = t.assignee as unknown
+      const assigneeEmail = Array.isArray(assigneeRaw)
+        ? (assigneeRaw[0] as { email: string } | undefined)?.email
+        : (assigneeRaw as { email: string } | null)?.email
 
       await Promise.all([
         admin.from('audit_log').insert({
@@ -196,6 +206,14 @@ export async function GET(request: NextRequest) {
           body:       'Ticket reabierto automáticamente.',
           visibility: 'internal',
         }),
+        assigneeEmail
+          ? postSlackDM(assigneeEmail, buildSnoozeReopenedMessage({
+              displayId: t.display_id as string,
+              subject:   t.subject   as string,
+              ticketId:  t.id,
+              appUrl:    appUrl,
+            }))
+          : Promise.resolve(),
       ])
     }
     if ((snoozedTickets ?? []).length > 0) {
@@ -454,7 +472,6 @@ export async function GET(request: NextRequest) {
 
   // ── Send one summary DM per assignee ─────────────────────────
   if (assigneeSummaries.size > 0) {
-    const appUrl    = process.env.NEXT_PUBLIC_APP_URL ?? ''
     const timeLabel = new Date().toLocaleTimeString('es-ES', {
       hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid',
     })
