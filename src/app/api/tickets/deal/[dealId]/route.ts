@@ -1,10 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 /**
  * GET /api/tickets/deal/[dealId]
  * Returns open tickets for the given Pipedrive deal ID.
  * Used by TicketForm to warn about duplicates.
+ * Uses admin client so system-created tickets (created_by=NULL) and
+ * tickets from other users are visible — same cross-user check as POST /api/tickets.
  */
 export async function GET(
   _request: NextRequest,
@@ -23,7 +26,8 @@ export async function GET(
     return NextResponse.json({ error: 'Deal ID inválido' }, { status: 400 })
   }
 
-  const { data: tickets, error } = await supabase
+  const admin = createAdminClient()
+  const { data: tickets, error } = await admin
     .from('tickets')
     .select('id, display_id, subject, status, categories(name)')
     .eq('pipedrive_deal_id', parsedId)

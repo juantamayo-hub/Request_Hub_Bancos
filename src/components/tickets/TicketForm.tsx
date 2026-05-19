@@ -188,7 +188,11 @@ export function TicketForm({ categories }: Props) {
       // Server-side duplicate block (safety net — UI should already prevent this)
       if (res.status === 409 && data.code === 'DUPLICATE_OPEN_TICKET') {
         toast.error(data.error, { duration: 6000 })
-        if (data.existingTicket?.id) router.push(`/tickets/${data.existingTicket.id}`)
+        if (data.existingTicket?.id) {
+          // Follow the ticket so the gestor can view it (RLS: employees only see own/followed tickets)
+          await fetch(`/api/tickets/${data.existingTicket.id}/follow`, { method: 'POST', credentials: 'include' }).catch(() => {})
+          router.push(`/tickets/${data.existingTicket.id}`)
+        }
         return
       }
 
