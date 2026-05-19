@@ -19,6 +19,8 @@ interface Props {
     from?:          string
     to?:            string
     source?:        string  // '' | 'system' | 'manual'
+    deal_id?:       string  // Pipedrive deal ID (exact match)
+    client_name?:   string  // partial text search
   }>
 }
 
@@ -52,10 +54,16 @@ export default async function AdminTicketsPage({ searchParams }: Props) {
   if (sp.source === 'system') query = query.is('created_by', null)
   if (sp.source === 'manual') query = query.not('created_by', 'is', null)
   if (sp.q) {
+    // Also searches client_name so gestores can find tickets by applicant name
     query = query.or(
-      `subject.ilike.%${sp.q}%,display_id.ilike.%${sp.q}%`,
+      `subject.ilike.%${sp.q}%,display_id.ilike.%${sp.q}%,client_name.ilike.%${sp.q}%`,
     )
   }
+  if (sp.deal_id) {
+    const parsed = parseInt(sp.deal_id, 10)
+    if (!isNaN(parsed) && parsed > 0) query = query.eq('pipedrive_deal_id', parsed)
+  }
+  if (sp.client_name?.trim()) query = query.ilike('client_name', `%${sp.client_name.trim()}%`)
 
   const [{ data: tickets }, { data: admins }, { data: categories }] = await Promise.all([
     query.order('created_at', { ascending: false }),
@@ -80,6 +88,7 @@ export default async function AdminTicketsPage({ searchParams }: Props) {
         </div>
 
         <AdminFilters current={sp} admins={admins ?? []} categories={categories ?? []} />
+
 
         <div className="mt-4">
           <TicketList

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse }                    from 'next/server'
 import { createAdminClient }                            from '@/lib/supabase/admin'
-import { fetchOpenDealsInStage, updateDealField, FIELD_DEAL_SUMMARY, type StageDeal } from '@/lib/pipedrive'
+import { fetchOpenDealsInStage, fetchDealStatus, updateDealField, FIELD_DEAL_SUMMARY, type StageDeal } from '@/lib/pipedrive'
 import { postSlackDM, buildCronSummaryMessage, buildSnoozeReopenedMessage } from '@/lib/notifications/slack'
 import { isConfigured, listSheetNames, fetchDealScoringData, DealScoringData } from '@/lib/sheets'
 
@@ -270,6 +270,87 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // ── Pass 1.5: Close tickets linked to lost Pipedrive deals ──────
+  // Fetches all open tickets with a pipedrive_deal_id, checks each deal's
+  // status via Pipedrive API, and closes tickets for deals marked 'lost'.
+  // Deduplicates: only adds the lost-closure note once per ticket.
+  if (selectedStageId === null && Date.now() - startedAt < 40_000) {
+    const LOST_NOTE = 'Ticket cerrado automáticamente porque el deal pasó a Lost en Pipedrive.'
+
+    const { data: openTicketsWithDeal } = await admin
+      .from('tickets')
+      .select('id, status, pipedrive_deal_id')
+      .in('status', ['new', 'in_progress', 'waiting_on_employee'])
+      .not('pipedrive_deal_id', 'is', null)
+
+    if (openTicketsWithDeal && openTicketsWithDeal.length > 0) {
+      // Collect unique deal IDs to minimise Pipedrive API calls
+      const uniqueDealIds = [...new Set(openTicketsWithDeal.map(t => t.pipedrive_deal_id as number))]
+
+      // Batch-check statuses in parallel, 10 at a time
+      const lostDealIds = new Set<number>()
+      const BATCH_SIZE = 10
+      for (let i = 0; i < uniqueDealIds.length; i += BATCH_SIZE) {
+        const batch = uniqueDealIds.slice(i, i + BATCH_SIZE)
+        const results = await Promise.allSettled(
+          batch.map(async dealId => ({ dealId, status: await fetchDealStatus(dealId) })),
+        )
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value.status === 'lost') {
+            lostDealIds.add(r.value.dealId)
+          }
+        }
+      }
+
+      if (lostDealIds.size > 0) {
+        const ticketsToClose = openTicketsWithDeal.filter(t => lostDealIds.has(t.pipedrive_deal_id as number))
+        const ticketIds = ticketsToClose.map(t => t.id)
+
+        // Find tickets that already have the lost note (deduplication)
+        const { data: existingNotes } = await admin
+          .from('ticket_comments')
+          .select('ticket_id')
+          .in('ticket_id', ticketIds)
+          .eq('body', LOST_NOTE)
+        const alreadyNotedIds = new Set((existingNotes ?? []).map(c => c.ticket_id as string))
+
+        let lostClosedCount = 0
+        for (const ticket of ticketsToClose) {
+          const needsNote = !alreadyNotedIds.has(ticket.id)
+          await Promise.all([
+            admin.from('tickets').update({ status: 'closed' }).eq('id', ticket.id),
+            admin.from('audit_log').insert({
+              ticket_id:  ticket.id,
+              actor_id:   '00000000-0000-0000-0000-000000000000',
+              action:     'status_changed',
+              from_value: ticket.status as string,
+              to_value:   'closed',
+              metadata:   { auto: true, reason: 'deal_lost_in_pipedrive', dealId: ticket.pipedrive_deal_id },
+            }),
+            admin.from('ticket_status_history').insert({
+              ticket_id:  ticket.id,
+              status:     'closed',
+              changed_by: '00000000-0000-0000-0000-000000000000',
+            }),
+          ])
+          // Only add the lost note once (dedup guard above ensures needsNote=false on re-runs)
+          if (needsNote) {
+            await admin.from('ticket_comments').insert({
+              ticket_id:  ticket.id,
+              author_id:  '00000000-0000-0000-0000-000000000000',
+              body:       LOST_NOTE,
+              visibility: 'internal',
+            })
+          }
+          lostClosedCount++
+        }
+        if (lostClosedCount > 0) {
+          console.log(`[cron] deal-lost: closed ${lostClosedCount} ticket(s) for ${lostDealIds.size} lost deal(s)`)
+        }
+      }
+    }
+  }
+
   // ── Pre-fetch open deals per stage (reused in Pass 2 + Pass 3) ─
   // This replaces N individual fetchDealStageId() calls with 3 bulk stage fetches,
   // avoiding Pipedrive rate-limit issues and drastically reducing API usage.
@@ -419,11 +500,11 @@ export async function GET(request: NextRequest) {
       continue
     }
 
-    // Batch deduplication: one query for all overdue deals in this category
+    // Batch deduplication: deal-wide check — if ANY open ticket exists for the deal
+    // (regardless of category), the cron will not create another proactive ticket.
     const { data: existingTickets } = await admin
       .from('tickets')
       .select('pipedrive_deal_id')
-      .eq('category_id', categoryId)
       .in('status', ['new', 'in_progress', 'waiting_on_employee'])
       .in('pipedrive_deal_id', overdueDealIds)
 

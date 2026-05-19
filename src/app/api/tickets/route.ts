@@ -64,6 +64,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Error de configuración del servidor' }, { status: 500 })
   }
 
+  // ─── Duplicate open-ticket check (per deal) ───────────────────
+  // Blocks creation if an open ticket already exists for the same Pipedrive deal.
+  // Uses admin client so the check is cross-user (not restricted by RLS).
+  if (pipedrive_deal_id) {
+    const { data: existingOpen } = await admin
+      .from('tickets')
+      .select('id, display_id, subject, status')
+      .eq('pipedrive_deal_id', pipedrive_deal_id)
+      .in('status', ['new', 'in_progress', 'waiting_on_employee'])
+      .limit(1)
+
+    if (existingOpen?.length) {
+      return NextResponse.json(
+        {
+          error: 'Este deal ya tiene un ticket abierto. Añade un comentario al ticket existente para continuar el seguimiento.',
+          existingTicket: existingOpen[0],
+          code: 'DUPLICATE_OPEN_TICKET',
+        },
+        { status: 409 },
+      )
+    }
+  }
+
   // ─── Owner assignment from routing_rules (round-robin) ───────
   const [{ data: rule }, { data: assigneeEmail }] = await Promise.all([
     admin

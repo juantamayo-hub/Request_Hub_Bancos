@@ -158,7 +158,10 @@ export default async function DashboardPage({
     opsQuery,
     supabase.from('categories').select('id, name').eq('is_active', true).order('name'),
     supabase.from('tickets').select('bank_name').not('bank_name', 'is', null),
-    supabase.from('profiles').select('id, email, first_name, last_name').eq('role', 'admin'),
+    // Fetch ALL profiles so tickets assigned to non-admins still appear in the chart.
+    // Filtering to role='admin' would silently exclude tickets assigned to users
+    // whose role has since changed, causing the chart to undercount.
+    supabase.from('profiles').select('id, email, first_name, last_name'),
   ])
 
   const opsTickets  = opsResult.data ?? []
@@ -204,7 +207,9 @@ export default async function DashboardPage({
       bankCatOps[bankName][catName].closed++
     }
 
-    // Owner workload
+    // Owner workload — source of truth: opsTickets (created within selected date range
+    // + optional bank/category filters). Counts here are period-scoped, so they will
+    // differ from the all-time totals visible on /admin/tickets with no date filter.
     const aid = (t as typeof t & { assignee_id?: string | null }).assignee_id
     if (aid && profileMap[aid]) {
       if (!ownerStats[aid]) ownerStats[aid] = { name: profileMap[aid], new: 0, in_progress: 0, waiting: 0, resolved_closed: 0 }

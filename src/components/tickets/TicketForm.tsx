@@ -51,8 +51,6 @@ export function TicketForm({ categories }: Props) {
   const [clientName,    setClientName]    = useState('')
   const [description,   setDescription]  = useState('')
   const [openTickets,   setOpenTickets]   = useState<OpenTicket[]>([])
-  const [followingIds,  setFollowingIds]  = useState<Set<string>>(new Set())
-  const [followLoading, setFollowLoading] = useState<Set<string>>(new Set())
 
   const dealDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -67,7 +65,6 @@ export function TicketForm({ categories }: Props) {
       setBankEmail('')
       setClientName('')
       setOpenTickets([])
-      setFollowingIds(new Set())
       return
     }
 
@@ -119,27 +116,6 @@ export function TicketForm({ categories }: Props) {
       setDealError('Error de conexión al verificar el deal.')
     } finally {
       setDealLoading(false)
-    }
-  }
-
-  const handleFollow = async (ticketId: string) => {
-    setFollowLoading(prev => new Set(prev).add(ticketId))
-    try {
-      const res  = await fetch(`/api/tickets/${ticketId}/follow`, { method: 'POST', credentials: 'include' })
-      const data = await res.json()
-      if (res.ok) {
-        setFollowingIds(prev => {
-          const next = new Set(prev)
-          if (data.following) next.add(ticketId)
-          else next.delete(ticketId)
-          return next
-        })
-        toast.success(data.following ? 'Siguiendo el ticket.' : 'Dejaste de seguir el ticket.')
-      }
-    } catch {
-      toast.error('Error al seguir el ticket.')
-    } finally {
-      setFollowLoading(prev => { const next = new Set(prev); next.delete(ticketId); return next })
     }
   }
 
@@ -208,6 +184,14 @@ export function TicketForm({ categories }: Props) {
       clearTimeout(timeoutId)
 
       const data = await res.json()
+
+      // Server-side duplicate block (safety net — UI should already prevent this)
+      if (res.status === 409 && data.code === 'DUPLICATE_OPEN_TICKET') {
+        toast.error(data.error, { duration: 6000 })
+        if (data.existingTicket?.id) router.push(`/tickets/${data.existingTicket.id}`)
+        return
+      }
+
       if (!res.ok) {
         toast.error(data.error ?? 'Error al crear la solicitud.')
         return
@@ -229,6 +213,88 @@ export function TicketForm({ categories }: Props) {
   }
 
   // ─── Render ───────────────────────────────────────────────────
+
+  // When open tickets exist, block the form entirely and show only the existing tickets
+  if (openTickets.length > 0 && dealInfo) {
+    return (
+      <div className="card p-6 space-y-5">
+        {/* Deal field remains visible so the user knows what deal triggered this */}
+        <div>
+          <Label htmlFor="dealId">Deal bancario *</Label>
+          <div className="relative mt-1">
+            <Input
+              id="dealId"
+              type="text"
+              inputMode="numeric"
+              placeholder="Ej: 275056"
+              value={dealId}
+              onChange={e => handleDealChange(e.target.value)}
+              className="focus:ring-[#083D20] focus:border-[#083D20] pr-8"
+            />
+            {dealLoading && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 animate-pulse">
+                ···
+              </span>
+            )}
+          </div>
+          {dealInfo && !dealError && (
+            <p className="mt-1 text-xs text-green-700">
+              ✓ Deal verificado — {dealInfo.bankName || 'banco no especificado en Pipedrive'}
+              {dealInfo.clientName ? ` · ${dealInfo.clientName}` : ''}
+            </p>
+          )}
+        </div>
+
+        {/* Blocker panel — replaces the entire form */}
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+          <p className="text-sm font-semibold text-amber-900 mb-1">
+            Este deal ya tiene {openTickets.length === 1 ? 'un ticket abierto' : `${openTickets.length} tickets abiertos`}.
+          </p>
+          <p className="text-xs text-amber-700 mb-4">
+            Para continuar el seguimiento, añade un comentario en el ticket existente. No se puede crear una nueva solicitud mientras haya tickets abiertos para este deal.
+          </p>
+
+          <div className="space-y-3">
+            {openTickets.map(ot => (
+              <div
+                key={ot.id}
+                className="rounded-lg border border-amber-200 bg-white px-4 py-3 flex items-center justify-between gap-4"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-mono text-gray-400 mb-0.5">{ot.display_id}</p>
+                  <p className="text-sm font-medium text-gray-800 truncate">{ot.subject}</p>
+                  {ot.categories?.name && (
+                    <p className="text-xs text-gray-500 mt-0.5">{ot.categories.name}</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    // Auto-follow so the ticket appears in "Mis Tickets" and comments are accessible
+                    await fetch(`/api/tickets/${ot.id}/follow`, { method: 'POST', credentials: 'include' }).catch(() => {})
+                    router.push(`/tickets/${ot.id}`)
+                  }}
+                  className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-[#083D20] px-4 py-2 text-sm font-medium text-white hover:bg-[#0a4d28] transition-colors whitespace-nowrap"
+                >
+                  Ir al ticket →
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="pt-1 border-t border-gray-100">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => router.back()}
+          >
+            Cancelar
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <form onSubmit={handleSubmit} className="card p-6 space-y-5">
@@ -261,45 +327,6 @@ export function TicketForm({ categories }: Props) {
             ✓ Deal verificado — {dealInfo.bankName || 'banco no especificado en Pipedrive'}
             {dealInfo.clientName ? ` · ${dealInfo.clientName}` : ''}
           </p>
-        )}
-        {openTickets.length > 0 && (
-          <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            <p className="font-medium mb-1">⚠️ Ya existe un ticket abierto para este deal:</p>
-            <ul className="space-y-1.5">
-              {openTickets.map(ot => {
-                const isFollowing = followingIds.has(ot.id)
-                const isLoadingFollow = followLoading.has(ot.id)
-                return (
-                  <li key={ot.id} className="flex items-center gap-2 flex-wrap">
-                    <a
-                      href={`/tickets/${ot.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-mono hover:underline text-amber-900 shrink-0"
-                    >
-                      {ot.display_id}
-                    </a>
-                    <span className="text-amber-700 flex-1 min-w-0 truncate">
-                      {ot.categories?.name ?? ''} — {ot.subject}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleFollow(ot.id)}
-                      disabled={isLoadingFollow}
-                      className={`shrink-0 text-xs px-2 py-0.5 rounded border transition-colors disabled:opacity-50 ${
-                        isFollowing
-                          ? 'border-amber-400 bg-amber-100 text-amber-800 hover:bg-amber-200'
-                          : 'border-amber-300 text-amber-700 hover:bg-amber-100'
-                      }`}
-                    >
-                      {isLoadingFollow ? '…' : isFollowing ? '✓ Siguiendo' : '+ Seguir'}
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-            <p className="mt-2 text-amber-600">Sigue el ticket para verlo en tus solicitudes, o crea uno nuevo si es necesario.</p>
-          </div>
         )}
       </div>
 
@@ -399,7 +426,8 @@ export function TicketForm({ categories }: Props) {
         <Button
           type="submit"
           isLoading={loading}
-          className="bg-[#083D20] hover:bg-[#0a4d28] text-white focus:ring-[#083D20]"
+          disabled={loading}
+          className="bg-[#083D20] hover:bg-[#0a4d28] text-white focus:ring-[#083D20] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Crear Solicitud
         </Button>

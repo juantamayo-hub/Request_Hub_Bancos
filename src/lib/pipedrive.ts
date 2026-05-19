@@ -140,6 +140,23 @@ export async function fetchDealStageId(dealId: number): Promise<number | null> {
   }
 }
 
+// ─── Fetch deal status ───────────────────────────────────────
+
+/** Returns 'open', 'won', or 'lost'. Returns null on error or if deal is not found. */
+export async function fetchDealStatus(dealId: number): Promise<'open' | 'won' | 'lost' | null> {
+  try {
+    const res = await fetch(
+      `${BASE_URL}/deals/${dealId}?api_token=${API_TOKEN}`,
+      { signal: AbortSignal.timeout(8_000), cache: 'no-store' },
+    )
+    if (!res.ok) return null
+    const json = await res.json()
+    return (json.data?.status as 'open' | 'won' | 'lost' | undefined) ?? null
+  } catch {
+    return null
+  }
+}
+
 // ─── Funnel Conversion (Bayteca Pipeline 7) ──────────────────
 
 const FIELD_BANK_SUBMISSION  = 'f20687cf44df74416768a89758ebabaca99a0c16'

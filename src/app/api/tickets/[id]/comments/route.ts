@@ -101,6 +101,20 @@ export async function POST(
 
   const admin = createAdminClient()
 
+  // Auto-follow: if commenter is not the ticket creator, add them as a follower
+  // so the ticket appears in their "Mis Tickets" and they can see future comments.
+  const { data: ticketOwner } = await admin
+    .from('tickets')
+    .select('created_by')
+    .eq('id', id)
+    .single()
+
+  if (ticketOwner && ticketOwner.created_by !== profile.id) {
+    await admin
+      .from('ticket_followers')
+      .upsert({ ticket_id: id, user_id: profile.id }, { onConflict: 'ticket_id,user_id', ignoreDuplicates: true })
+  }
+
   // Audit log
   await admin.from('audit_log').insert({
     ticket_id:  id,

@@ -14,6 +14,8 @@ interface Props {
     category_ids?: string  // comma-separated
     from?:         string
     to?:           string
+    deal_id?:      string  // Pipedrive deal ID (exact match)
+    client_name?:  string  // partial text search
   }>
 }
 
@@ -37,6 +39,11 @@ export default async function MyTicketsPage({ searchParams }: Props) {
   }
   if (sp.from) query = query.gte('created_at', sp.from)
   if (sp.to)   query = query.lte('created_at', `${sp.to}T23:59:59`)
+  if (sp.deal_id) {
+    const parsed = parseInt(sp.deal_id, 10)
+    if (!isNaN(parsed) && parsed > 0) query = query.eq('pipedrive_deal_id', parsed)
+  }
+  if (sp.client_name?.trim()) query = query.ilike('client_name', `%${sp.client_name.trim()}%`)
 
   const [{ data: tickets }, { data: categories }] = await Promise.all([
     query.order('created_at', { ascending: false }),
@@ -61,7 +68,7 @@ export default async function MyTicketsPage({ searchParams }: Props) {
         </div>
 
         <TicketFilters
-          current={{ category_ids: sp.category_ids, from: sp.from, to: sp.to }}
+          current={{ category_ids: sp.category_ids, from: sp.from, to: sp.to, deal_id: sp.deal_id, client_name: sp.client_name }}
           categories={categories ?? []}
         />
 

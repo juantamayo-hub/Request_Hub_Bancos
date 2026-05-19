@@ -27,6 +27,8 @@ interface Props {
     from?:          string
     to?:            string
     source?:        string  // '' | 'system' | 'manual'
+    deal_id?:       string  // Pipedrive deal ID (exact match)
+    client_name?:   string  // partial text search
   }
   admins:      AdminOption[]
   categories?: CategoryOption[]
@@ -56,10 +58,16 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
   useEffect(() => { setPendingStatuses((current.statuses ?? '').split(',').filter(Boolean)) }, [current.statuses])
 
   // ─── Search debounce ──────────────────────────────────────────
-  const [searchValue, setSearchValue] = useState(current.q ?? '')
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>()
-  // Sync search when URL changes externally
-  useEffect(() => { setSearchValue(current.q ?? '') }, [current.q])
+  const [searchValue,     setSearchValue]     = useState(current.q           ?? '')
+  const [clientNameValue, setClientNameValue] = useState(current.client_name ?? '')
+  const [dealIdValue,     setDealIdValue]     = useState(current.deal_id     ?? '')
+  const searchTimer     = useRef<ReturnType<typeof setTimeout>>()
+  const clientNameTimer = useRef<ReturnType<typeof setTimeout>>()
+  const dealIdTimer     = useRef<ReturnType<typeof setTimeout>>()
+  // Sync when URL changes externally
+  useEffect(() => { setSearchValue(current.q ?? '')                 }, [current.q])
+  useEffect(() => { setClientNameValue(current.client_name ?? '')   }, [current.client_name])
+  useEffect(() => { setDealIdValue(current.deal_id ?? '')           }, [current.deal_id])
 
   // ─── Close dropdowns on outside click ────────────────────────
   useEffect(() => {
@@ -111,6 +119,18 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
     searchTimer.current = setTimeout(() => update('q', value), 300)
   }
 
+  const handleClientName = (value: string) => {
+    setClientNameValue(value)
+    clearTimeout(clientNameTimer.current)
+    clientNameTimer.current = setTimeout(() => update('client_name', value), 300)
+  }
+
+  const handleDealId = (value: string) => {
+    setDealIdValue(value)
+    clearTimeout(dealIdTimer.current)
+    dealIdTimer.current = setTimeout(() => update('deal_id', value), 400)
+  }
+
   // ─── Dropdown toggle helpers ──────────────────────────────────
   function toggleCatDropdown() {
     if (catOpen) {
@@ -128,7 +148,7 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
 
   const clear = () => startTransition(() => router.replace(pathname))
 
-  const hasFilters = !!(current.statuses || current.priority || current.q || current.assignee || current.category_ids || current.from || current.to || current.source)
+  const hasFilters = !!(current.statuses || current.priority || current.q || current.assignee || current.category_ids || current.from || current.to || current.source || current.deal_id || current.client_name)
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
@@ -143,10 +163,10 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
       {/* Search with debounce */}
       <input
         type="search"
-        placeholder="Search tickets…"
+        placeholder="Buscar solicitud…"
         value={searchValue}
         onChange={e => handleSearch(e.target.value)}
-        className="h-8 px-3 text-sm border border-gray-300 rounded-lg w-44 focus:outline-none focus:ring-2 focus:ring-gray-900"
+        className="h-8 px-3 text-sm border border-gray-300 rounded-lg w-44 focus:outline-none focus:ring-2 focus:ring-[#083D20]"
       />
 
       {/* Status multiselect — applied on close */}
@@ -157,7 +177,7 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
           className="h-8 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white flex items-center gap-1.5 whitespace-nowrap"
         >
           {pendingStatuses.length === 0
-            ? 'All statuses'
+            ? 'Todos los estados'
             : `${pendingStatuses.length} estado${pendingStatuses.length !== 1 ? 's' : ''}`}
           <span className="text-gray-400 text-xs">▾</span>
         </button>
@@ -186,9 +206,9 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
       <select
         value={current.priority ?? ''}
         onChange={e => update('priority', e.target.value)}
-        className="h-8 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+        className="h-8 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#083D20]"
       >
-        <option value="">All priorities</option>
+        <option value="">Todas las prioridades</option>
         {TICKET_PRIORITIES.map(p => (
           <option key={p.value} value={p.value}>{p.label}</option>
         ))}
@@ -276,9 +296,28 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
         <option value="manual">Solo gestores</option>
       </select>
 
+      {/* Deal ID filter */}
+      <input
+        type="text"
+        inputMode="numeric"
+        placeholder="Deal ID"
+        value={dealIdValue}
+        onChange={e => handleDealId(e.target.value)}
+        className="h-8 px-3 text-sm border border-gray-300 rounded-lg w-28 focus:outline-none focus:ring-2 focus:ring-[#083D20]"
+      />
+
+      {/* Client name filter */}
+      <input
+        type="search"
+        placeholder="Nombre cliente"
+        value={clientNameValue}
+        onChange={e => handleClientName(e.target.value)}
+        className="h-8 px-3 text-sm border border-gray-300 rounded-lg w-40 focus:outline-none focus:ring-2 focus:ring-[#083D20]"
+      />
+
       {hasFilters && (
         <button onClick={clear} className="text-sm text-gray-400 hover:text-gray-700 transition-colors">
-          Clear filters
+          Limpiar filtros
         </button>
       )}
     </div>

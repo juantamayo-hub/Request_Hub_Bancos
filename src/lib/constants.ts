@@ -18,17 +18,18 @@ export const TICKET_PRIORITIES: { value: TicketPriority; label: string }[] = [
 ]
 
 export const STATUS_COLORS: Record<TicketStatus, string> = {
-  new:                 'bg-[#DBEAFE] text-[#1E3A8A]',
-  in_progress:         'bg-[#FEF9C3] text-[#713F12]',
-  waiting_on_employee: 'bg-[#FFEDD5] text-[#9A3412]',
-  resolved:            'bg-red-100 text-red-700',
-  closed:              'bg-[#F3F4F6] text-[#6B7280]',
+  new:                 'bg-blue-100 text-blue-700',
+  in_progress:         'bg-violet-100 text-violet-700',
+  waiting_on_employee: 'bg-amber-100 text-amber-700',
+  resolved:            'bg-rose-100 text-rose-600',   // "Cancelado" — user cancellation
+  closed:              'bg-slate-100 text-slate-500',
 }
 
+
 export const PRIORITY_COLORS: Record<TicketPriority, string> = {
-  low:    'bg-gray-100 text-gray-600',
-  medium: 'bg-blue-100 text-blue-700',
-  high:   'bg-red-100 text-red-700',
+  low:    'bg-emerald-50 text-emerald-600',
+  medium: 'bg-sky-100 text-sky-700',
+  high:   'bg-red-100 text-red-600',
 }
 
 export const OPEN_STATUSES: TicketStatus[] = ['new', 'in_progress', 'waiting_on_employee']

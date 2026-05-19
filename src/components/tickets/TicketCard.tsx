@@ -3,6 +3,16 @@ import { StatusBadge } from '@/components/shared/StatusBadge'
 import { PriorityBadge } from '@/components/shared/PriorityBadge'
 import { formatDateShort, isSlaBreaching } from '@/lib/utils'
 import type { TicketWithRelations } from '@/lib/database.types'
+import type { TicketStatus } from '@/lib/database.types'
+
+// Hex values for the left-border accent — inline style bypasses .card's border-gray-200 cascade
+const STATUS_ACCENT: Record<TicketStatus, string> = {
+  new:                 '#60A5FA',  // blue-400
+  in_progress:         '#A78BFA',  // violet-400
+  waiting_on_employee: '#FBBF24',  // amber-400
+  resolved:            '#FB7185',  // rose-400
+  closed:              '#CBD5E1',  // slate-300
+}
 
 interface Props {
   ticket:  TicketWithRelations
@@ -16,6 +26,7 @@ export function TicketCard({ ticket: t, isAdmin = false }: Props) {
     <Link
       href={href}
       className="card block p-4 hover:shadow-md transition-shadow group"
+      style={{ borderLeftWidth: '4px', borderLeftColor: STATUS_ACCENT[t.status] ?? '#CBD5E1' }}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
@@ -33,6 +44,10 @@ export function TicketCard({ ticket: t, isAdmin = false }: Props) {
           <p className="text-sm font-medium text-gray-900 group-hover:text-gray-700 truncate">
             {t.subject}
           </p>
+
+          {t.client_name && (
+            <p className="text-xs text-gray-500 mt-0.5 truncate">{t.client_name}</p>
+          )}
 
           {isAdmin && (
             <p className="text-xs text-gray-400 mt-0.5 truncate">

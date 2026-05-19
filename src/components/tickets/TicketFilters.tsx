@@ -13,6 +13,8 @@ interface Props {
     category_ids?: string  // comma-separated category IDs
     from?:         string
     to?:           string
+    deal_id?:      string  // Pipedrive deal ID (exact match)
+    client_name?:  string  // partial text search
   }
   categories: CategoryOption[]
 }
@@ -30,10 +32,18 @@ export function TicketFilters({ current, categories }: Props) {
   const urlCatIds = (current.category_ids ?? '').split(',').filter(Boolean)
   const [pendingCatIds, setPendingCatIds] = useState<string[]>(urlCatIds)
 
+  // Text filter state with debounce timers
+  const [clientNameValue, setClientNameValue] = useState(current.client_name ?? '')
+  const [dealIdValue,     setDealIdValue]     = useState(current.deal_id     ?? '')
+  const clientNameTimer = useRef<ReturnType<typeof setTimeout>>()
+  const dealIdTimer     = useRef<ReturnType<typeof setTimeout>>()
+
   // Sync when URL changes (e.g. "Clear filters")
   useEffect(() => {
     setPendingCatIds((current.category_ids ?? '').split(',').filter(Boolean))
   }, [current.category_ids])
+  useEffect(() => { setClientNameValue(current.client_name ?? '') }, [current.client_name])
+  useEffect(() => { setDealIdValue(current.deal_id ?? '')         }, [current.deal_id])
 
   const applyCategories = useCallback((ids: string[]) => {
     const nextStr = ids.join(',')
@@ -69,9 +79,21 @@ export function TicketFilters({ current, categories }: Props) {
     startTransition(() => router.replace(`${pathname}?${next.toString()}`))
   }, [params, pathname, router])
 
+  const handleClientName = (value: string) => {
+    setClientNameValue(value)
+    clearTimeout(clientNameTimer.current)
+    clientNameTimer.current = setTimeout(() => update('client_name', value), 300)
+  }
+
+  const handleDealId = (value: string) => {
+    setDealIdValue(value)
+    clearTimeout(dealIdTimer.current)
+    dealIdTimer.current = setTimeout(() => update('deal_id', value), 400)
+  }
+
   const clear = () => startTransition(() => router.replace(pathname))
 
-  const hasFilters = !!(current.category_ids || current.from || current.to)
+  const hasFilters = !!(current.category_ids || current.from || current.to || current.deal_id || current.client_name)
 
   return (
     <div className="flex items-center gap-2 flex-wrap mb-4">
@@ -128,6 +150,25 @@ export function TicketFilters({ current, categories }: Props) {
           className="h-8 px-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#083D20]"
         />
       </div>
+
+      {/* Deal ID filter */}
+      <input
+        type="text"
+        inputMode="numeric"
+        placeholder="Deal ID"
+        value={dealIdValue}
+        onChange={e => handleDealId(e.target.value)}
+        className="h-8 px-3 text-sm border border-gray-300 rounded-lg w-28 focus:outline-none focus:ring-2 focus:ring-[#083D20]"
+      />
+
+      {/* Client name filter */}
+      <input
+        type="search"
+        placeholder="Nombre cliente"
+        value={clientNameValue}
+        onChange={e => handleClientName(e.target.value)}
+        className="h-8 px-3 text-sm border border-gray-300 rounded-lg w-40 focus:outline-none focus:ring-2 focus:ring-[#083D20]"
+      />
 
       {hasFilters && (
         <button onClick={clear} className="text-sm text-gray-400 hover:text-gray-700 transition-colors">
