@@ -94,17 +94,34 @@ export async function POST(
   const isSystemTicket  = ticketMeta?.created_by === null
   const isNotCreator    = ticketMeta?.created_by !== profile.id
 
-  // System tickets have created_by=NULL, which never matches auth.uid().
-  // The RLS follower-path is the only way for employees to insert a comment.
-  // Pre-follow here so the INSERT below passes RLS even on first visit.
+  // Access control: non-admins can only comment on tickets they created, follow,
+  // or that are system-created (created_by=NULL). Check this before insert.
+  if (profile.role !== 'admin') {
+    const isOwner = ticketMeta?.created_by === profile.id
+    if (!isOwner && !isSystemTicket) {
+      const { data: follower } = await admin
+        .from('ticket_followers')
+        .select('ticket_id')
+        .eq('ticket_id', id)
+        .eq('user_id', profile.id)
+        .maybeSingle()
+      if (!follower) {
+        return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+      }
+    }
+  }
+
+  // Auto-follow system tickets before insert so the ticket appears in "Mis Solicitudes"
   if (isSystemTicket && profile.role !== 'admin') {
     await admin
       .from('ticket_followers')
       .upsert({ ticket_id: id, user_id: profile.id }, { onConflict: 'ticket_id,user_id', ignoreDuplicates: true })
   }
 
-  // Insert comment via regular client — RLS enforces ownership/follower check
-  const { data: comment, error: insertErr } = await supabase
+  // Insert via admin client — access control is enforced above in TypeScript.
+  // Using the user (RLS) client was causing silent failures for system tickets
+  // due to the NULL created_by not matching auth.uid() in the follower EXISTS check.
+  const { data: comment, error: insertErr } = await admin
     .from('ticket_comments')
     .insert({
       ticket_id:  id,
