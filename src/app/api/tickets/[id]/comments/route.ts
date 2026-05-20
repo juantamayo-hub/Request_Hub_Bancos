@@ -82,7 +82,28 @@ export async function POST(
   const effectiveVisibility = profile.role === 'admin' ? visibility : 'public'
   if (profile.role !== 'admin') files = []
 
-  // Insert comment via regular client — RLS enforces ownership for employees
+  const admin = createAdminClient()
+
+  // Fetch ticket metadata before insert (needed for two things below)
+  const { data: ticketMeta } = await admin
+    .from('tickets')
+    .select('created_by')
+    .eq('id', id)
+    .single()
+
+  const isSystemTicket  = ticketMeta?.created_by === null
+  const isNotCreator    = ticketMeta?.created_by !== profile.id
+
+  // System tickets have created_by=NULL, which never matches auth.uid().
+  // The RLS follower-path is the only way for employees to insert a comment.
+  // Pre-follow here so the INSERT below passes RLS even on first visit.
+  if (isSystemTicket && profile.role !== 'admin') {
+    await admin
+      .from('ticket_followers')
+      .upsert({ ticket_id: id, user_id: profile.id }, { onConflict: 'ticket_id,user_id', ignoreDuplicates: true })
+  }
+
+  // Insert comment via regular client — RLS enforces ownership/follower check
   const { data: comment, error: insertErr } = await supabase
     .from('ticket_comments')
     .insert({
@@ -99,17 +120,9 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to add comment' }, { status: 500 })
   }
 
-  const admin = createAdminClient()
-
-  // Auto-follow: if commenter is not the ticket creator, add them as a follower
-  // so the ticket appears in their "Mis Tickets" and they can see future comments.
-  const { data: ticketOwner } = await admin
-    .from('tickets')
-    .select('created_by')
-    .eq('id', id)
-    .single()
-
-  if (ticketOwner && ticketOwner.created_by !== profile.id) {
+  // Auto-follow for non-system tickets: if commenter ≠ creator, follow the ticket
+  // so it appears in their "Mis Tickets" and they receive future notifications.
+  if (!isSystemTicket && isNotCreator) {
     await admin
       .from('ticket_followers')
       .upsert({ ticket_id: id, user_id: profile.id }, { onConflict: 'ticket_id,user_id', ignoreDuplicates: true })

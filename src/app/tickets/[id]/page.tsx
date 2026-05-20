@@ -19,15 +19,15 @@ interface Props {
 }
 
 export default async function TicketDetailPage({ params }: Props) {
-  const { id }   = await params
-  const profile  = await requireProfile()
-  const supabase = await createClient()
-
+  const { id }      = await params
+  const profile     = await requireProfile()
+  const supabase    = await createClient()
   const adminClient = createAdminClient()
 
-  // Fetch ticket + comments in parallel
+  // Use admin client so system-created tickets (created_by=NULL) are always reachable.
+  // Access control is enforced in TypeScript below.
   const [{ data: ticket }, { data: rawComments }] = await Promise.all([
-    supabase
+    adminClient
       .from('tickets')
       .select(`
         *,
@@ -38,8 +38,7 @@ export default async function TicketDetailPage({ params }: Props) {
       .eq('id', id)
       .single(),
 
-    // RLS also filters internal comments for non-admins.
-    supabase
+    adminClient
       .from('ticket_comments')
       .select(`*, profiles(id, email, first_name, last_name, avatar_url)`)
       .eq('ticket_id', id)
@@ -48,8 +47,37 @@ export default async function TicketDetailPage({ params }: Props) {
 
   if (!ticket) notFound()
 
+  const isOwner    = ticket.created_by === profile.id
+  const isSystem   = ticket.created_by === null
+  const isAdmin    = profile.role === 'admin'
+
+  // Access control: own ticket | admin | system ticket | follower
+  if (!isOwner && !isAdmin && !isSystem) {
+    const { data: follower } = await adminClient
+      .from('ticket_followers')
+      .select('ticket_id')
+      .eq('ticket_id', id)
+      .eq('user_id', profile.id)
+      .maybeSingle()
+    if (!follower) notFound()
+  }
+
+  // Auto-follow system tickets for non-admins:
+  // • Makes the ticket appear in "Mis Solicitudes"
+  // • Satisfies the RLS follower check so the employee can post comments
+  if (isSystem && !isAdmin) {
+    await adminClient
+      .from('ticket_followers')
+      .upsert({ ticket_id: id, user_id: profile.id }, { onConflict: 'ticket_id,user_id', ignoreDuplicates: true })
+  }
+
+  // Non-admins only see public comments (same rule as RLS comments_select_own_public)
+  const filteredComments = isAdmin
+    ? (rawComments ?? [])
+    : (rawComments ?? []).filter(c => c.visibility === 'public')
+
   // Fetch attachments + batch-sign all URLs in one storage call
-  const commentIds = (rawComments ?? []).map(c => c.id)
+  const commentIds = filteredComments.map(c => c.id)
   const rawAttachments = commentIds.length > 0
     ? (await adminClient.from('comment_attachments').select('*').in('comment_id', commentIds)).data ?? []
     : []
@@ -69,7 +97,7 @@ export default async function TicketDetailPage({ params }: Props) {
     attachmentsByComment[att.comment_id]!.push({ ...att, signedUrl: signedMap[att.file_path] ?? '' })
   }
 
-  const comments: TicketCommentWithAuthor[] = (rawComments ?? []).map(comment => ({
+  const comments: TicketCommentWithAuthor[] = filteredComments.map(comment => ({
     ...comment,
     attachments: attachmentsByComment[comment.id] ?? [],
   })) as TicketCommentWithAuthor[]

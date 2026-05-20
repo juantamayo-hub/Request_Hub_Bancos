@@ -410,6 +410,23 @@ export async function GET(request: NextRequest) {
         .in('status', ['new', 'in_progress', 'waiting_on_employee'])
         .not('pipedrive_deal_id', 'is', null)
 
+      // Pre-fetch last public comment per ticket in one query (avoids N+1 in the loop below)
+      const ticketIdsForClose = (openTickets ?? []).map(t => t.id as string)
+      const lastCommentByTicket = new Map<string, string>()
+      if (ticketIdsForClose.length > 0) {
+        const { data: lastComments } = await admin
+          .from('ticket_comments')
+          .select('ticket_id, body')
+          .in('ticket_id', ticketIdsForClose)
+          .eq('visibility', 'public')
+          .order('created_at', { ascending: false })
+        // Global desc order → first occurrence per ticket_id = most recent comment
+        for (const row of lastComments ?? []) {
+          const tid = row.ticket_id as string
+          if (!lastCommentByTicket.has(tid)) lastCommentByTicket.set(tid, row.body)
+        }
+      }
+
       let autoClosedCountRun = 0
       for (const ticket of openTickets ?? []) {
         const triggerStage = catTriggerMap.get(ticket.category_id as string)
@@ -426,15 +443,7 @@ export async function GET(request: NextRequest) {
         await admin.from('tickets').update({ status: 'closed' }).eq('id', ticket.id)
         autoClosedCountRun++
 
-        // Fetch last public comment for deal summary
-        const { data: lastComment } = await admin
-          .from('ticket_comments')
-          .select('body')
-          .eq('ticket_id', ticket.id)
-          .eq('visibility', 'public')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single()
+        const lastCommentBody = lastCommentByTicket.get(ticket.id)
 
         await Promise.all([
           admin.from('audit_log').insert({
@@ -458,8 +467,8 @@ export async function GET(request: NextRequest) {
           }),
         ])
 
-        if (lastComment?.body && ticket.pipedrive_deal_id) {
-          updateDealField(ticket.pipedrive_deal_id as number, FIELD_DEAL_SUMMARY, lastComment.body).catch(console.error)
+        if (lastCommentBody && ticket.pipedrive_deal_id) {
+          updateDealField(ticket.pipedrive_deal_id as number, FIELD_DEAL_SUMMARY, lastCommentBody).catch(console.error)
         }
       }
       autoClosedCount = autoClosedCountRun

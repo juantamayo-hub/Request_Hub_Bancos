@@ -64,11 +64,14 @@ export function TicketCard({ ticket: t, isAdmin = false }: Props) {
 
       <div className="flex items-center justify-between mt-3 text-xs text-gray-400">
         <span>{formatDateShort(t.created_at)}</span>
-        {t.assignee && (
-          <span className="truncate ml-2">
-            → {t.assignee.first_name ?? t.assignee.email}
-          </span>
-        )}
+        <div className="flex items-center gap-3 min-w-0">
+          {new Date(t.updated_at).getTime() - new Date(t.created_at).getTime() > 60_000 && (
+            <span className="shrink-0">Últ. act. {formatDateShort(t.updated_at)}</span>
+          )}
+          {t.assignee && (
+            <span className="truncate">→ {t.assignee.first_name ?? t.assignee.email}</span>
+          )}
+        </div>
       </div>
     </Link>
   )
