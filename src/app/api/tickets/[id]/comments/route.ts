@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notifyNewComment } from '@/lib/notifications'
-import { updateDealField, FIELD_CLAIM_CHANNEL, CLAIM_CHANNEL_IDS } from '@/lib/pipedrive'
+import { updateDealField, createDealNote, FIELD_CLAIM_CHANNEL, CLAIM_CHANNEL_IDS } from '@/lib/pipedrive'
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
@@ -36,7 +36,7 @@ export async function POST(
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, role')
+    .select('id, role, first_name, email')
     .eq('id', user.id)
     .single()
 
@@ -197,7 +197,7 @@ export async function POST(
     const { data: ticket } = await admin
       .from('tickets')
       .select(`
-        display_id, subject, created_by, assignee_id,
+        display_id, subject, created_by, assignee_id, pipedrive_deal_id,
         requester:profiles!tickets_created_by_fkey(email),
         assignee:profiles!tickets_assignee_id_fkey(email)
       `)
@@ -225,6 +225,15 @@ export async function POST(
           recipientEmail: ownerEmail,
           isOwner:        true,
         }).catch(console.error)
+        // In-app notification for assignee
+        if (ticket.assignee_id) {
+          await admin.from('notifications').insert({
+            user_id:    ticket.assignee_id,
+            ticket_id:  id,
+            comment_id: comment.id,
+            type:       'new_comment',
+          })
+        }
       } else if (!isRequester && requesterEmail) {
         // Owner or other admin commented → notify the requester
         await notifyNewComment({
@@ -235,6 +244,23 @@ export async function POST(
           recipientEmail: requesterEmail,
           isOwner:        false,
         }).catch(console.error)
+        // In-app notification for requester
+        if (ticket.created_by) {
+          await admin.from('notifications').insert({
+            user_id:    ticket.created_by,
+            ticket_id:  id,
+            comment_id: comment.id,
+            type:       'new_comment',
+          })
+        }
+      }
+
+      // Pipedrive note when an admin comments on a deal-linked ticket
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+      if (profile.role === 'admin' && ticket.pipedrive_deal_id) {
+        const authorName = profile.first_name ?? profile.email
+        const noteContent = `💬 ${authorName} dejó un comentario en ${ticket.display_id} — ${ticket.subject}\n\nVer ticket: ${appUrl}/admin/tickets/${id}`
+        createDealNote(ticket.pipedrive_deal_id as number, noteContent).catch(console.error)
       }
     }
   }

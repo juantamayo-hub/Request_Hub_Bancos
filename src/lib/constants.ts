@@ -5,10 +5,10 @@ export const ALLOWED_DOMAINS = ['huspy.io', 'bayteca.com']
 
 export const TICKET_STATUSES: { value: TicketStatus; label: string }[] = [
   { value: 'new',                 label: 'Nuevo' },
-  { value: 'in_progress',         label: 'En Proceso' },
-  { value: 'waiting_on_employee', label: 'Esperando' },
+  { value: 'in_progress',         label: 'Proceso / Trámite' },
+  { value: 'waiting_on_employee', label: 'Esperando banco' },
   { value: 'resolved',            label: 'Cancelado' },
-  { value: 'closed',              label: 'Cerrado' },
+  { value: 'closed',              label: 'Solucionado' },
 ]
 
 export const TICKET_PRIORITIES: { value: TicketPriority; label: string }[] = [

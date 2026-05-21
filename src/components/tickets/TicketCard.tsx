@@ -15,19 +15,25 @@ const STATUS_ACCENT: Record<TicketStatus, string> = {
 }
 
 interface Props {
-  ticket:  TicketWithRelations
-  isAdmin?: boolean
+  ticket:    TicketWithRelations
+  isAdmin?:  boolean
+  hasUnread?: boolean
 }
 
-export function TicketCard({ ticket: t, isAdmin = false }: Props) {
+export function TicketCard({ ticket: t, isAdmin = false, hasUnread = false }: Props) {
   const href = isAdmin ? `/admin/tickets/${t.id}` : `/tickets/${t.id}`
 
   return (
     <Link
       href={href}
-      className="card block p-4 hover:shadow-md transition-shadow group"
+      className="card relative block p-4 hover:shadow-md transition-shadow group"
       style={{ borderLeftWidth: '4px', borderLeftColor: STATUS_ACCENT[t.status] ?? '#CBD5E1' }}
     >
+      {hasUnread && (
+        <span className="absolute top-2 right-2 flex items-center gap-1 text-xs bg-blue-500 text-white rounded-full px-1.5 py-0.5 leading-none">
+          ✉
+        </span>
+      )}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1 flex-wrap">

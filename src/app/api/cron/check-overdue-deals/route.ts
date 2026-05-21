@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse }                    from 'next/server'
 import { createAdminClient }                            from '@/lib/supabase/admin'
-import { fetchOpenDealsInStage, fetchDealStatus, updateDealField, FIELD_DEAL_SUMMARY, type StageDeal } from '@/lib/pipedrive'
+import { fetchOpenDealsInStage, fetchDealStatus, updateDealField, createDealNote, FIELD_DEAL_SUMMARY, type StageDeal } from '@/lib/pipedrive'
 import { postSlackDM, buildCronSummaryMessage, buildSnoozeReopenedMessage } from '@/lib/notifications/slack'
 import { isConfigured, listSheetNames, fetchDealScoringData, DealScoringData } from '@/lib/sheets'
 
@@ -587,9 +587,20 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    const { error: insertErr } = await admin.from('tickets').insert(rows)
+    const { data: createdTickets, error: insertErr } = await admin
+      .from('tickets').insert(rows).select('id, display_id, pipedrive_deal_id')
     if (insertErr) {
       console.error(`[cron] bulk insert error category=${rule.categoryName}:`, insertErr)
+    }
+
+    // Fire-and-forget Pipedrive note for each auto-created ticket
+    for (const t of createdTickets ?? []) {
+      if (t.pipedrive_deal_id) {
+        createDealNote(
+          t.pipedrive_deal_id as number,
+          `🎟 Ticket automático creado: ${t.display_id}\nVer ticket: ${appUrl}/admin/tickets/${t.id}`,
+        ).catch(console.error)
+      }
     }
 
     const created = insertErr ? 0 : newDeals.length

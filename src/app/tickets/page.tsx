@@ -45,10 +45,12 @@ export default async function MyTicketsPage({ searchParams }: Props) {
   }
   if (sp.client_name?.trim()) query = query.ilike('client_name', `%${sp.client_name.trim()}%`)
 
-  const [{ data: tickets }, { data: categories }] = await Promise.all([
+  const [{ data: tickets }, { data: categories }, { data: unreadNotifs }] = await Promise.all([
     query.order('created_at', { ascending: false }),
     supabase.from('categories').select('id, name').eq('is_active', true).eq('is_system', false).order('name'),
+    supabase.from('notifications').select('ticket_id').eq('is_read', false),
   ])
+  const unreadTicketIds = new Set((unreadNotifs ?? []).map(n => n.ticket_id as string))
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#FAFAF8' }}>
@@ -72,7 +74,7 @@ export default async function MyTicketsPage({ searchParams }: Props) {
           categories={categories ?? []}
         />
 
-        <TicketList tickets={(tickets ?? []) as TicketWithRelations[]} />
+        <TicketList tickets={(tickets ?? []) as TicketWithRelations[]} unreadTicketIds={unreadTicketIds} />
       </main>
     </div>
   )

@@ -79,10 +79,10 @@ export async function postSlackDM(email: string, message: SlackMessage): Promise
 
 const STATUS_LABELS: Record<string, string> = {
   new:                 'Nuevo',
-  in_progress:         'En Proceso',
-  waiting_on_employee: 'Esperando',
+  in_progress:         'Proceso / Trámite',
+  waiting_on_employee: 'Esperando banco',
   resolved:            'Cancelado',
-  closed:              'Cerrado',
+  closed:              'Solucionado',
 }
 
 /**

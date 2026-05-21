@@ -2,11 +2,12 @@ import { TicketCard } from './TicketCard'
 import type { TicketWithRelations } from '@/lib/database.types'
 
 interface Props {
-  tickets:  TicketWithRelations[]
-  isAdmin?: boolean
+  tickets:          TicketWithRelations[]
+  isAdmin?:         boolean
+  unreadTicketIds?: Set<string>
 }
 
-export function TicketList({ tickets, isAdmin = false }: Props) {
+export function TicketList({ tickets, isAdmin = false, unreadTicketIds }: Props) {
   if (tickets.length === 0) {
     return (
       <div className="text-center py-16 text-gray-400">
@@ -26,7 +27,12 @@ export function TicketList({ tickets, isAdmin = false }: Props) {
   return (
     <div className="space-y-2">
       {tickets.map(ticket => (
-        <TicketCard key={ticket.id} ticket={ticket} isAdmin={isAdmin} />
+        <TicketCard
+          key={ticket.id}
+          ticket={ticket}
+          isAdmin={isAdmin}
+          hasUnread={unreadTicketIds?.has(ticket.id) ?? false}
+        />
       ))}
     </div>
   )

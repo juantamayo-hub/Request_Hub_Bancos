@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { displayName } from '@/lib/utils'
 import type { Profile } from '@/lib/database.types'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 interface Props {
   profile: Profile
@@ -91,6 +92,7 @@ export function Navbar({ profile, isAdmin = false }: Props) {
 
         {/* User menu */}
         <div className="flex items-center gap-3">
+          <NotificationBell profile={profile} />
           {isAdmin && (
             <span className="text-xs px-2 py-0.5 rounded-full bg-[#1F3657] text-white font-medium">
               Admin

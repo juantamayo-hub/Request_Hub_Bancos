@@ -65,11 +65,13 @@ export default async function AdminTicketsPage({ searchParams }: Props) {
   }
   if (sp.client_name?.trim()) query = query.ilike('client_name', `%${sp.client_name.trim()}%`)
 
-  const [{ data: tickets }, { data: admins }, { data: categories }] = await Promise.all([
+  const [{ data: tickets }, { data: admins }, { data: categories }, { data: unreadNotifs }] = await Promise.all([
     query.order('created_at', { ascending: false }),
     supabase.from('profiles').select('id, email, first_name, last_name').eq('role', 'admin').order('first_name'),
     supabase.from('categories').select('id, name').eq('is_active', true).order('name'),
+    supabase.from('notifications').select('ticket_id').eq('is_read', false),
   ])
+  const unreadTicketIds = new Set((unreadNotifs ?? []).map(n => n.ticket_id as string))
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#FAFAF8' }}>
@@ -94,6 +96,7 @@ export default async function AdminTicketsPage({ searchParams }: Props) {
           <TicketList
             tickets={(tickets ?? []) as TicketWithRelations[]}
             isAdmin
+            unreadTicketIds={unreadTicketIds}
           />
         </div>
       </main>
