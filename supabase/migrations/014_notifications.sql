@@ -21,3 +21,4 @@ CREATE POLICY "notifications_own" ON notifications
   FOR ALL USING (auth.uid() = user_id);
 
 GRANT SELECT, INSERT, UPDATE ON notifications TO authenticated;
+GRANT ALL ON notifications TO service_role;
