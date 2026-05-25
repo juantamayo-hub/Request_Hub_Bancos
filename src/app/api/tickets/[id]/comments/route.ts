@@ -194,7 +194,7 @@ export async function POST(
 
   // ─── Notify on public comments (bidirectional) ────────────────
   if (effectiveVisibility === 'public') {
-    const { data: ticket } = await admin
+    const { data: ticket, error: ticketFetchErr } = await admin
       .from('tickets')
       .select(`
         display_id, subject, created_by, assignee_id, pipedrive_deal_id,
@@ -203,6 +203,8 @@ export async function POST(
       `)
       .eq('id', id)
       .single()
+
+    if (ticketFetchErr) console.error('notification ticket fetch error:', ticketFetchErr)
 
     if (ticket) {
       const extractEmail = (rel: unknown): string => {
@@ -227,12 +229,13 @@ export async function POST(
         }).catch(console.error)
         // In-app notification for assignee
         if (ticket.assignee_id) {
-          await admin.from('notifications').insert({
+          const { error: notifErr } = await admin.from('notifications').insert({
             user_id:    ticket.assignee_id,
             ticket_id:  id,
             comment_id: comment.id,
             type:       'new_comment',
           })
+          if (notifErr) console.error('notifications insert error (assignee):', notifErr)
         }
       } else if (!isRequester && requesterEmail) {
         // Owner or other admin commented → notify the requester
@@ -246,12 +249,33 @@ export async function POST(
         }).catch(console.error)
         // In-app notification for requester
         if (ticket.created_by) {
-          await admin.from('notifications').insert({
+          const { error: notifErr } = await admin.from('notifications').insert({
             user_id:    ticket.created_by,
             ticket_id:  id,
             comment_id: comment.id,
             type:       'new_comment',
           })
+          if (notifErr) console.error('notifications insert error (requester):', notifErr)
+        }
+      } else if (!ticket.created_by && ownerEmail && profile.id !== ticket.assignee_id) {
+        // System ticket (created_by = NULL): notify assignee when someone other than
+        // the assignee comments (e.g. a follower or gestor leaving an update).
+        await notifyNewComment({
+          ticketId:       id,
+          displayId:      ticket.display_id,
+          subject:        ticket.subject,
+          commentPreview: commentBody.trim(),
+          recipientEmail: ownerEmail,
+          isOwner:        true,
+        }).catch(console.error)
+        if (ticket.assignee_id) {
+          const { error: notifErr } = await admin.from('notifications').insert({
+            user_id:    ticket.assignee_id,
+            ticket_id:  id,
+            comment_id: comment.id,
+            type:       'new_comment',
+          })
+          if (notifErr) console.error('notifications insert error (system ticket assignee):', notifErr)
         }
       }
 

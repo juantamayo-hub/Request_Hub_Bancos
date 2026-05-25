@@ -30,13 +30,16 @@ export default async function AdminTicketsPage({ searchParams }: Props) {
   const supabase = await createClient()
 
   // Base query — RLS admin policy returns all tickets.
+  // Explicit columns only (avoids fetching large fields like description).
   let query = supabase
     .from('tickets')
     .select(`
-      *,
+      id, display_id, subject, status, priority,
+      created_at, updated_at, client_name, sla_deadline,
+      assignee_id, created_by,
       categories(id, name),
-      profiles!tickets_created_by_fkey(id, email, first_name, last_name, avatar_url),
-      assignee:profiles!tickets_assignee_id_fkey(id, email, first_name, last_name, avatar_url)
+      profiles!tickets_created_by_fkey(email),
+      assignee:profiles!tickets_assignee_id_fkey(first_name, email)
     `)
 
   if (sp.statuses) {
@@ -65,8 +68,10 @@ export default async function AdminTicketsPage({ searchParams }: Props) {
   }
   if (sp.client_name?.trim()) query = query.ilike('client_name', `%${sp.client_name.trim()}%`)
 
+  const PAGE_SIZE = 200
+
   const [{ data: tickets }, { data: admins }, { data: categories }, { data: unreadNotifs }] = await Promise.all([
-    query.order('created_at', { ascending: false }),
+    query.order('created_at', { ascending: false }).limit(PAGE_SIZE),
     supabase.from('profiles').select('id, email, first_name, last_name').eq('role', 'admin').order('first_name'),
     supabase.from('categories').select('id, name').eq('is_active', true).order('name'),
     supabase.from('notifications').select('ticket_id').eq('is_read', false),
@@ -82,6 +87,7 @@ export default async function AdminTicketsPage({ searchParams }: Props) {
             <h1 className="text-2xl font-bold text-gray-900">Todas las Solicitudes</h1>
             <p className="text-sm text-gray-500 mt-0.5">
               {tickets?.length ?? 0} solicitud{tickets?.length !== 1 ? 'es' : ''}
+              {(tickets?.length ?? 0) >= PAGE_SIZE && ' · usa filtros para acotar'}
             </p>
           </div>
           <Link href="/dashboard" className="text-sm text-gray-600 hover:text-gray-900 underline-offset-2 hover:underline">
@@ -94,7 +100,7 @@ export default async function AdminTicketsPage({ searchParams }: Props) {
 
         <div className="mt-4">
           <TicketList
-            tickets={(tickets ?? []) as TicketWithRelations[]}
+            tickets={(tickets ?? []) as unknown as TicketWithRelations[]}
             isAdmin
             unreadTicketIds={unreadTicketIds}
           />
