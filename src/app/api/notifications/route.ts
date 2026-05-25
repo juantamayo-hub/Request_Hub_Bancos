@@ -21,10 +21,7 @@ export async function GET(request: NextRequest) {
     .from('notifications')
     .select(`
       id, type, is_read, created_at, ticket_id, comment_id,
-      ticket:tickets!notifications_ticket_id_fkey(display_id, subject),
-      author:ticket_comments!notifications_comment_id_fkey(
-        author:profiles!ticket_comments_author_id_fkey(first_name, email)
-      )
+      ticket:tickets(display_id, subject)
     `)
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
