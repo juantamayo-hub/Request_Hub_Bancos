@@ -193,6 +193,9 @@ export async function POST(
   }
 
   // ─── Notify on public comments (bidirectional) ────────────────
+  // eslint-disable-next-line prefer-const
+  let _notifDebug: Record<string, unknown> = { visibility: effectiveVisibility }
+
   if (effectiveVisibility === 'public') {
     // Fetch ticket scalar fields first (no FK-hint joins to avoid PostgREST errors).
     const { data: ticket, error: ticketFetchErr } = await admin
@@ -200,6 +203,9 @@ export async function POST(
       .select('display_id, subject, created_by, assignee_id, pipedrive_deal_id')
       .eq('id', id)
       .single()
+
+    _notifDebug.ticketFetchErr = ticketFetchErr?.message ?? null
+    _notifDebug.ticketFound    = !!ticket
 
     if (ticketFetchErr) console.error('notification ticket fetch error:', ticketFetchErr)
 
@@ -217,7 +223,15 @@ export async function POST(
       const ownerEmail     = (assigneeResult.data  as { email?: string } | null)?.email ?? ''
       const isRequester    = profile.id === ticket.created_by
 
+      _notifDebug.created_by   = ticket.created_by
+      _notifDebug.assignee_id  = ticket.assignee_id
+      _notifDebug.isRequester  = isRequester
+      _notifDebug.hasOwnerEmail      = !!ownerEmail
+      _notifDebug.hasRequesterEmail  = !!requesterEmail
+      _notifDebug.commenterIsAssignee = profile.id === ticket.assignee_id
+
       if (isRequester && ownerEmail) {
+        _notifDebug.branch = 'requester→assignee'
         // Requester commented → notify the assigned owner
         await notifyNewComment({
           ticketId:       id,
@@ -235,9 +249,11 @@ export async function POST(
             comment_id: comment.id,
             type:       'new_comment',
           })
+          _notifDebug.insertErr = notifErr?.message ?? null
           if (notifErr) console.error('notifications insert error (assignee):', notifErr)
         }
       } else if (!isRequester && requesterEmail) {
+        _notifDebug.branch = 'admin→requester'
         // Owner or other admin commented → notify the requester
         await notifyNewComment({
           ticketId:       id,
@@ -255,9 +271,11 @@ export async function POST(
             comment_id: comment.id,
             type:       'new_comment',
           })
+          _notifDebug.insertErr = notifErr?.message ?? null
           if (notifErr) console.error('notifications insert error (requester):', notifErr)
         }
       } else if (!ticket.created_by && ownerEmail && profile.id !== ticket.assignee_id) {
+        _notifDebug.branch = 'system→assignee'
         // System ticket (created_by = NULL): notify assignee when someone other than
         // the assignee comments (e.g. a follower or gestor leaving an update).
         await notifyNewComment({
@@ -275,8 +293,11 @@ export async function POST(
             comment_id: comment.id,
             type:       'new_comment',
           })
+          _notifDebug.insertErr = notifErr?.message ?? null
           if (notifErr) console.error('notifications insert error (system ticket assignee):', notifErr)
         }
+      } else {
+        _notifDebug.branch = 'no_match'
       }
 
       // Pipedrive note when an admin comments on a deal-linked ticket
@@ -305,5 +326,5 @@ export async function POST(
     }
   }
 
-  return NextResponse.json({ comment: { ...comment, attachments } }, { status: 201 })
+  return NextResponse.json({ comment: { ...comment, attachments }, _notifDebug }, { status: 201 })
 }
