@@ -194,28 +194,28 @@ export async function POST(
 
   // ─── Notify on public comments (bidirectional) ────────────────
   if (effectiveVisibility === 'public') {
+    // Fetch ticket scalar fields first (no FK-hint joins to avoid PostgREST errors).
     const { data: ticket, error: ticketFetchErr } = await admin
       .from('tickets')
-      .select(`
-        display_id, subject, created_by, assignee_id, pipedrive_deal_id,
-        requester:profiles!tickets_created_by_fkey(email),
-        assignee:profiles!tickets_assignee_id_fkey(email)
-      `)
+      .select('display_id, subject, created_by, assignee_id, pipedrive_deal_id')
       .eq('id', id)
       .single()
 
     if (ticketFetchErr) console.error('notification ticket fetch error:', ticketFetchErr)
 
     if (ticket) {
-      const extractEmail = (rel: unknown): string => {
-        if (!rel) return ''
-        if (Array.isArray(rel)) return (rel[0] as { email?: string })?.email ?? ''
-        return (rel as { email?: string }).email ?? ''
-      }
-
-      const requesterEmail = extractEmail(ticket.requester)
-      const ownerEmail     = extractEmail(ticket.assignee)
-      const isRequester = profile.id === ticket.created_by
+      // Fetch profile emails separately — avoids ambiguous FK hint issues.
+      const [requesterResult, assigneeResult] = await Promise.all([
+        ticket.created_by
+          ? admin.from('profiles').select('email').eq('id', ticket.created_by).single()
+          : Promise.resolve({ data: null, error: null }),
+        ticket.assignee_id
+          ? admin.from('profiles').select('email').eq('id', ticket.assignee_id).single()
+          : Promise.resolve({ data: null, error: null }),
+      ])
+      const requesterEmail = (requesterResult.data as { email?: string } | null)?.email ?? ''
+      const ownerEmail     = (assigneeResult.data  as { email?: string } | null)?.email ?? ''
+      const isRequester    = profile.id === ticket.created_by
 
       if (isRequester && ownerEmail) {
         // Requester commented → notify the assigned owner
