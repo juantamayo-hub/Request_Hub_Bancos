@@ -310,9 +310,27 @@ export default async function DashboardPage({
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
 
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Resumen operativo</p>
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
+            <p className="text-sm text-gray-400 mt-0.5">Resumen operativo</p>
+          </div>
+          <a
+            href="https://banks-command-center.vercel.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition-all hover:shadow-lg hover:opacity-90 active:scale-95 whitespace-nowrap"
+            style={{ backgroundColor: '#083D20' }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2"/>
+              <path d="M8 21h8M12 17v4"/>
+            </svg>
+            Command Center
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M7 7h10v10M7 17 17 7"/>
+            </svg>
+          </a>
         </div>
 
         {/* ── Tab switcher ────────────────────────────────────── */}
