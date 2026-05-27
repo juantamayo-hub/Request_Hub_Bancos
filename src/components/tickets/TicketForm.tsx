@@ -19,6 +19,12 @@ const BANKING_CATEGORIES = [
   'Otra',
 ]
 
+const ESTADO_VIVIENDA_OPTIONS = [
+  'Cliente con arras/reserva',
+  'Buscando - solicitud contacto para cerrar reserva',
+  'Buscando - 3 meses vista',
+]
+
 interface Props {
   categories: Pick<Category, 'id' | 'name'>[]
 }
@@ -42,6 +48,7 @@ export function TicketForm({ categories }: Props) {
   const [loading, setLoading] = useState(false)
 
   const [categoryId,    setCategoryId]    = useState('')
+  const [subcategory,   setSubcategory]   = useState('')
   const [dealId,        setDealId]        = useState('')
   const [dealInfo,      setDealInfo]      = useState<DealInfo | null>(null)
   const [dealLoading,   setDealLoading]   = useState(false)
@@ -51,6 +58,11 @@ export function TicketForm({ categories }: Props) {
   const [clientName,    setClientName]    = useState('')
   const [description,   setDescription]  = useState('')
   const [openTickets,   setOpenTickets]   = useState<OpenTicket[]>([])
+
+  const selectedCatName = categories.find(c => c.id === categoryId)?.name ?? ''
+  const showEstadoVivienda =
+    selectedCatName === 'Contactar con el cliente (Banco)' &&
+    bankName.toLowerCase().includes('santander')
 
   const dealDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -150,6 +162,10 @@ export function TicketForm({ categories }: Props) {
       toast.error('El nombre del banco no se pudo obtener del deal.')
       return
     }
+    if (showEstadoVivienda && !subcategory) {
+      toast.error('Por favor, selecciona el estado de la vivienda.')
+      return
+    }
     if (!description.trim()) {
       toast.error('Por favor, escribe una descripción.')
       return
@@ -177,6 +193,7 @@ export function TicketForm({ categories }: Props) {
           bank_email:        bankEmail.trim() || undefined,
           client_name:       clientName.trim() || undefined,
           pipedrive_deal_id: parseInt(dealId.trim(), 10),
+          subcategory:       showEstadoVivienda ? subcategory : undefined,
         }),
         credentials: 'include',
         signal:      controller.signal,
@@ -358,7 +375,7 @@ export function TicketForm({ categories }: Props) {
         <select
           id="category"
           value={categoryId}
-          onChange={e => setCategoryId(e.target.value)}
+          onChange={e => { setCategoryId(e.target.value); setSubcategory('') }}
           className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#083D20] focus:border-[#083D20]"
           required
         >
@@ -372,6 +389,25 @@ export function TicketForm({ categories }: Props) {
           })}
         </select>
       </div>
+
+      {/* Subcategoría: Estado de la vivienda (solo para Contactar con el cliente + Santander) */}
+      {showEstadoVivienda && (
+        <div>
+          <Label htmlFor="estadoVivienda">Estado de la vivienda *</Label>
+          <select
+            id="estadoVivienda"
+            value={subcategory}
+            onChange={e => setSubcategory(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#083D20] focus:border-[#083D20]"
+            required
+          >
+            <option value="">Selecciona el estado…</option>
+            {ESTADO_VIVIENDA_OPTIONS.map(opt => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Nombre del banco (auto-rellenado desde Pipedrive, read-only) */}
       <div>
