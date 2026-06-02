@@ -270,12 +270,13 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // ── Pass 1.5: Close tickets linked to lost Pipedrive deals ──────
+  // ── Pass 1.5: Close tickets linked to closed Pipedrive deals (lost or won) ──
   // Fetches all open tickets with a pipedrive_deal_id, checks each deal's
-  // status via Pipedrive API, and closes tickets for deals marked 'lost'.
-  // Deduplicates: only adds the lost-closure note once per ticket.
+  // status via Pipedrive API, and closes tickets for deals marked 'lost' or 'won'.
+  // Deduplicates: only adds the closure note once per ticket.
   if (selectedStageId === null && Date.now() - startedAt < 40_000) {
     const LOST_NOTE = 'Ticket cerrado automáticamente porque el deal pasó a Lost en Pipedrive.'
+    const WON_NOTE  = 'Ticket cerrado automáticamente porque el deal fue ganado (Won) en Pipedrive.'
 
     const { data: openTicketsWithDeal } = await admin
       .from('tickets')
@@ -288,7 +289,7 @@ export async function GET(request: NextRequest) {
       const uniqueDealIds = [...new Set(openTicketsWithDeal.map(t => t.pipedrive_deal_id as number))]
 
       // Batch-check statuses in parallel, 10 at a time
-      const lostDealIds = new Set<number>()
+      const closedDealMap = new Map<number, 'lost' | 'won'>()
       const BATCH_SIZE = 10
       for (let i = 0; i < uniqueDealIds.length; i += BATCH_SIZE) {
         const batch = uniqueDealIds.slice(i, i + BATCH_SIZE)
@@ -296,27 +297,29 @@ export async function GET(request: NextRequest) {
           batch.map(async dealId => ({ dealId, status: await fetchDealStatus(dealId) })),
         )
         for (const r of results) {
-          if (r.status === 'fulfilled' && r.value.status === 'lost') {
-            lostDealIds.add(r.value.dealId)
+          if (r.status === 'fulfilled' && (r.value.status === 'lost' || r.value.status === 'won')) {
+            closedDealMap.set(r.value.dealId, r.value.status as 'lost' | 'won')
           }
         }
       }
 
-      if (lostDealIds.size > 0) {
-        const ticketsToClose = openTicketsWithDeal.filter(t => lostDealIds.has(t.pipedrive_deal_id as number))
+      if (closedDealMap.size > 0) {
+        const ticketsToClose = openTicketsWithDeal.filter(t => closedDealMap.has(t.pipedrive_deal_id as number))
         const ticketIds = ticketsToClose.map(t => t.id)
 
-        // Find tickets that already have the lost note (deduplication)
+        // Find tickets that already have a closure note (deduplication)
         const { data: existingNotes } = await admin
           .from('ticket_comments')
           .select('ticket_id')
           .in('ticket_id', ticketIds)
-          .eq('body', LOST_NOTE)
+          .in('body', [LOST_NOTE, WON_NOTE])
         const alreadyNotedIds = new Set((existingNotes ?? []).map(c => c.ticket_id as string))
 
-        let lostClosedCount = 0
+        let closedCount = 0
         for (const ticket of ticketsToClose) {
-          const needsNote = !alreadyNotedIds.has(ticket.id)
+          const dealStatus  = closedDealMap.get(ticket.pipedrive_deal_id as number) ?? 'lost'
+          const closureNote = dealStatus === 'won' ? WON_NOTE : LOST_NOTE
+          const needsNote   = !alreadyNotedIds.has(ticket.id)
           await Promise.all([
             admin.from('tickets').update({ status: 'closed' }).eq('id', ticket.id),
             admin.from('audit_log').insert({
@@ -325,7 +328,7 @@ export async function GET(request: NextRequest) {
               action:     'status_changed',
               from_value: ticket.status as string,
               to_value:   'closed',
-              metadata:   { auto: true, reason: 'deal_lost_in_pipedrive', dealId: ticket.pipedrive_deal_id },
+              metadata:   { auto: true, reason: `deal_${dealStatus}_in_pipedrive`, dealId: ticket.pipedrive_deal_id },
             }),
             admin.from('ticket_status_history').insert({
               ticket_id:  ticket.id,
@@ -333,19 +336,19 @@ export async function GET(request: NextRequest) {
               changed_by: '00000000-0000-0000-0000-000000000000',
             }),
           ])
-          // Only add the lost note once (dedup guard above ensures needsNote=false on re-runs)
+          // Only add the closure note once (dedup guard above ensures needsNote=false on re-runs)
           if (needsNote) {
             await admin.from('ticket_comments').insert({
               ticket_id:  ticket.id,
               author_id:  '00000000-0000-0000-0000-000000000000',
-              body:       LOST_NOTE,
+              body:       closureNote,
               visibility: 'internal',
             })
           }
-          lostClosedCount++
+          closedCount++
         }
-        if (lostClosedCount > 0) {
-          console.log(`[cron] deal-lost: closed ${lostClosedCount} ticket(s) for ${lostDealIds.size} lost deal(s)`)
+        if (closedCount > 0) {
+          console.log(`[cron] deal-closed: closed ${closedCount} ticket(s) for ${closedDealMap.size} closed deal(s)`)
         }
       }
     }

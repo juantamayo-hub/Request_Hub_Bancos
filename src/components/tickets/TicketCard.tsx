@@ -63,7 +63,7 @@ export function TicketCard({ ticket: t, isAdmin = false, hasUnread = false }: Pr
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <PriorityBadge priority={t.priority} />
+          {isAdmin && <PriorityBadge priority={t.priority} />}
           <StatusBadge status={t.status} />
         </div>
       </div>

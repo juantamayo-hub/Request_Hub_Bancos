@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 })
   }
 
-  const { category_id, subject, description, subcategory, priority, tags, bank_name, bank_email, client_name, pipedrive_deal_id } = body
+  const { category_id, subject, description, subcategory, tags, bank_name, bank_email, client_name, pipedrive_deal_id } = body
 
 
   if (!category_id || !subject?.trim() || !description?.trim()) {
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ─── Owner assignment from routing_rules (round-robin) ───────
-  const [{ data: rule }, { data: assigneeEmail }] = await Promise.all([
+  const [{ data: rule }, { data: rawAssigneeEmail }] = await Promise.all([
     admin
       .from('routing_rules')
       .select('sla_hours, default_priority, categories(id, name)')
@@ -98,19 +98,38 @@ export async function POST(request: NextRequest) {
   ])
 
   // ─── Resolve assignee email → profile id ──────────────────────
+  let assigneeEmail = rawAssigneeEmail as string | null
   let assigneeId: string | null = null
   if (assigneeEmail) {
     const { data: assignee } = await admin
       .from('profiles')
       .select('id')
-      .eq('email', assigneeEmail as string)
+      .eq('email', assigneeEmail)
       .single()
     assigneeId = assignee?.id ?? null
   }
 
-  const slaHours       = rule?.sla_hours ?? 72
-  const defaultPriority = priority ?? rule?.default_priority ?? 'medium'
-  const slaDeadline    = new Date(Date.now() + slaHours * 60 * 60 * 1000).toISOString()
+  // ─── Special routing: Santander + "Contactar con el cliente" → Florencia ──
+  const catNameForRouting = (rule as { categories?: { name: string } } | null)?.categories?.name ?? ''
+  if (
+    catNameForRouting === 'Contactar con el cliente (Banco)' &&
+    bank_name.trim().toLowerCase().includes('santander')
+  ) {
+    const FLOR_EMAIL = 'florencia.fernandez@bayteca.com'
+    const { data: florProfile } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('email', FLOR_EMAIL)
+      .single()
+    if (florProfile?.id) {
+      assigneeId    = florProfile.id
+      assigneeEmail = FLOR_EMAIL
+    }
+  }
+
+  const slaHours        = rule?.sla_hours ?? 72
+  const defaultPriority = 'low'
+  const slaDeadline     = new Date(Date.now() + slaHours * 60 * 60 * 1000).toISOString()
 
   // ─── Create ticket ────────────────────────────────────────────
   const { data: ticket, error: insertErr } = await supabase

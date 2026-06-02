@@ -85,6 +85,14 @@ export function NotificationBell({ profile }: Props) {
     router.push(href)
   }
 
+  async function handleDismissNotification(e: React.MouseEvent, n: Notification) {
+    e.stopPropagation()
+    if (!n.is_read) {
+      await fetch(`/api/notifications/${n.id}/read`, { method: 'PATCH' })
+    }
+    setNotifications(prev => prev.filter(x => x.id !== n.id))
+  }
+
   return (
     <div className="relative" ref={dropdownRef}>
       {/* Bell button */}
@@ -126,23 +134,37 @@ export function NotificationBell({ profile }: Props) {
               <p className="px-4 py-6 text-sm text-gray-400 text-center">Sin notificaciones</p>
             ) : (
               notifications.map(n => (
-                <button
+                <div
                   key={n.id}
-                  onClick={() => handleClickNotification(n)}
-                  className={`w-full text-left px-4 py-3 flex items-start gap-2.5 border-b border-gray-50 hover:bg-gray-50 transition-colors ${!n.is_read ? 'bg-blue-50/60' : ''}`}
+                  className={`flex items-stretch border-b border-gray-50 ${!n.is_read ? 'bg-blue-50/60' : ''}`}
                 >
-                  <span className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${!n.is_read ? 'bg-blue-500' : 'bg-transparent'}`} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-gray-800 truncate">
-                      {n.ticket?.display_id ?? '—'}
-                    </p>
-                    <p className="text-xs text-gray-500 truncate">{n.ticket?.subject ?? ''}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">Nuevo comentario · {timeAgo(n.created_at)}</p>
-                  </div>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
+                  <button
+                    onClick={() => handleClickNotification(n)}
+                    className="flex-1 text-left px-4 py-3 flex items-start gap-2.5 hover:bg-gray-50 transition-colors"
+                  >
+                    <span className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${!n.is_read ? 'bg-blue-500' : 'bg-transparent'}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-gray-800 truncate">
+                        {n.ticket?.display_id ?? '—'}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">{n.ticket?.subject ?? ''}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Nuevo comentario · {timeAgo(n.created_at)}</p>
+                    </div>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={(e) => handleDismissNotification(e, n)}
+                    className="flex items-center justify-center w-8 shrink-0 text-gray-300 hover:text-red-400 hover:bg-gray-50 transition-colors border-l border-gray-100"
+                    aria-label="Descartar notificación"
+                    title="Descartar"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               ))
             )}
           </div>

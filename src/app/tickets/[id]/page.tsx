@@ -127,7 +127,7 @@ export default async function TicketDetailPage({ params }: Props) {
             </div>
             <div className="flex items-center gap-3 mt-2 flex-wrap">
               <StatusBadge status={t.status} />
-              <PriorityBadge priority={t.priority} />
+              {isAdmin && <PriorityBadge priority={t.priority} />}
               <span className="text-sm text-gray-500">{t.categories.name}</span>
               {isSlaBreaching(t.sla_deadline) && (
                 <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">
