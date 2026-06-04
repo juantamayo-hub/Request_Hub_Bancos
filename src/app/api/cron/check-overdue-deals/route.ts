@@ -601,7 +601,7 @@ export async function GET(request: NextRequest) {
       if (t.pipedrive_deal_id) {
         createDealNote(
           t.pipedrive_deal_id as number,
-          `🎟 Ticket automático creado: ${t.display_id}\nVer ticket: ${appUrl}/admin/tickets/${t.id}`,
+          `🎟 Ticket automático creado: ${t.display_id}\nVer ticket: ${appUrl}/tickets/${t.id}`,
         ).catch(console.error)
       }
     }

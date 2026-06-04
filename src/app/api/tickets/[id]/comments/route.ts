@@ -281,7 +281,7 @@ export async function POST(
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
       if (profile.role === 'admin' && ticket.pipedrive_deal_id) {
         const authorName = profile.first_name ?? profile.email
-        const noteContent = `💬 ${authorName} dejó un comentario en ${ticket.display_id} — ${ticket.subject}\n\nVer ticket: ${appUrl}/admin/tickets/${id}`
+        const noteContent = `💬 ${authorName} dejó un comentario en ${ticket.display_id} — ${ticket.subject}\n\nVer ticket: ${appUrl}/tickets/${id}`
         createDealNote(ticket.pipedrive_deal_id as number, noteContent).catch(console.error)
       }
     }
