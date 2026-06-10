@@ -46,10 +46,10 @@ export function NotificationBell({ profile }: Props) {
     }
   }, [])
 
-  // Initial fetch + poll every 30s
+  // Initial fetch + poll every 120s
   useEffect(() => {
     void fetchNotifications()
-    const interval = setInterval(() => { void fetchNotifications() }, 30_000)
+    const interval = setInterval(() => { void fetchNotifications() }, 120_000)
     return () => clearInterval(interval)
   }, [fetchNotifications])
 
