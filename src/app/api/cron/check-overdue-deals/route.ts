@@ -44,7 +44,7 @@ const OVERDUE_RULES: OverdueRule[] = [
     stageId:        72,
     categoryName:   'Valuation Overdue',
     timestampField: FIELD_VALUATION_TS,
-    thresholdHours: 240, // 10 days
+    thresholdHours: 360, // 15 days
     stageName:      'Valuation',
   },
   {
