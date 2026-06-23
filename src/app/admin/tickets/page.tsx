@@ -18,6 +18,7 @@ interface Props {
     category_ids?:  string  // comma-separated
     from?:          string
     to?:            string
+    date_field?:    string  // 'created_at' | 'updated_at'
     source?:        string  // '' | 'system' | 'manual'
     deal_id?:       string  // Pipedrive deal ID (exact match)
     client_name?:   string  // partial text search
@@ -52,8 +53,9 @@ export default async function AdminTicketsPage({ searchParams }: Props) {
     const ids = sp.category_ids.split(',').filter(Boolean)
     if (ids.length > 0) query = query.in('category_id', ids)
   }
-  if (sp.from)         query = query.gte('created_at', sp.from)
-  if (sp.to)           query = query.lte('created_at', `${sp.to}T23:59:59`)
+  const dateField = sp.date_field === 'updated_at' ? 'updated_at' : 'created_at'
+  if (sp.from)         query = query.gte(dateField, sp.from)
+  if (sp.to)           query = query.lte(dateField, `${sp.to}T23:59:59`)
   if (sp.source === 'system') query = query.is('created_by', null)
   if (sp.source === 'manual') query = query.not('created_by', 'is', null)
   if (sp.q) {
@@ -71,7 +73,7 @@ export default async function AdminTicketsPage({ searchParams }: Props) {
   const PAGE_SIZE = 200
 
   const [{ data: tickets }, { data: admins }, { data: categories }, { data: unreadNotifs }] = await Promise.all([
-    query.order('created_at', { ascending: false }).limit(PAGE_SIZE),
+    query.order(dateField, { ascending: false }).limit(PAGE_SIZE),
     supabase.from('profiles').select('id, email, first_name, last_name').eq('role', 'admin').order('first_name'),
     supabase.from('categories').select('id, name').eq('is_active', true).order('name'),
     supabase.from('notifications').select('ticket_id').eq('is_read', false),

@@ -26,6 +26,7 @@ interface Props {
     category_ids?:  string  // comma-separated category IDs
     from?:          string
     to?:            string
+    date_field?:    string  // 'created_at' | 'updated_at'
     source?:        string  // '' | 'system' | 'manual'
     deal_id?:       string  // Pipedrive deal ID (exact match)
     client_name?:   string  // partial text search
@@ -148,7 +149,7 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
 
   const clear = () => startTransition(() => router.replace(pathname))
 
-  const hasFilters = !!(current.statuses || current.priority || current.q || current.assignee || current.category_ids || current.from || current.to || current.source || current.deal_id || current.client_name)
+  const hasFilters = !!(current.statuses || current.priority || current.q || current.assignee || current.category_ids || current.from || current.to || current.date_field || current.source || current.deal_id || current.client_name)
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
@@ -250,6 +251,22 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
       )}
 
       {/* Date range */}
+      <div className="flex items-center gap-1 border border-gray-300 rounded-lg overflow-hidden h-8">
+        <button
+          type="button"
+          onClick={() => update('date_field', '')}
+          className={`px-2 text-xs h-full transition-colors ${(!current.date_field || current.date_field === 'created_at') ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+        >
+          Creación
+        </button>
+        <button
+          type="button"
+          onClick={() => update('date_field', 'updated_at')}
+          className={`px-2 text-xs h-full transition-colors ${current.date_field === 'updated_at' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+        >
+          Actualización
+        </button>
+      </div>
       <div className="flex items-center gap-1">
         <label className="text-xs text-gray-500">Desde</label>
         <input
