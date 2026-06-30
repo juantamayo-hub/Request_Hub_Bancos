@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
   const [{ data: rule }, { data: rawAssigneeEmail }] = await Promise.all([
     admin
       .from('routing_rules')
-      .select('sla_hours, default_priority, categories(id, name)')
+      .select('sla_hours, default_priority, bank_overrides, categories(id, name)')
       .eq('category_id', category_id)
       .single(),
     admin.rpc('pick_next_assignee_email', { p_category_id: category_id }),
@@ -109,21 +109,20 @@ export async function POST(request: NextRequest) {
     assigneeId = assignee?.id ?? null
   }
 
-  // ─── Special routing: Santander + "Contactar con el cliente" → Florencia ──
-  const catNameForRouting = (rule as { categories?: { name: string } } | null)?.categories?.name ?? ''
-  if (
-    catNameForRouting === 'Contactar con el cliente (Banco)' &&
-    bank_name.trim().toLowerCase().includes('santander')
-  ) {
-    const FLOR_EMAIL = 'florencia.fernandez@bayteca.com'
-    const { data: florProfile } = await admin
+  // ─── Bank-specific routing overrides (configured in Admin → Responsables por Categoría) ──
+  type BankOverride = { bank: string; assignee_email: string }
+  const bankOverrides = ((rule as { bank_overrides?: BankOverride[] } | null)?.bank_overrides ?? []) as BankOverride[]
+  const bankLower = bank_name.trim().toLowerCase()
+  const matchedOverride = bankOverrides.find(o => bankLower.includes(o.bank.toLowerCase()))
+  if (matchedOverride) {
+    const { data: overrideProfile } = await admin
       .from('profiles')
       .select('id')
-      .eq('email', FLOR_EMAIL)
+      .eq('email', matchedOverride.assignee_email)
       .single()
-    if (florProfile?.id) {
-      assigneeId    = florProfile.id
-      assigneeEmail = FLOR_EMAIL
+    if (overrideProfile?.id) {
+      assigneeId    = overrideProfile.id
+      assigneeEmail = matchedOverride.assignee_email
     }
   }
 

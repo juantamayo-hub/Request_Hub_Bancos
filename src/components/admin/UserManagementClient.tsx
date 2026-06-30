@@ -7,7 +7,8 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import type { Profile } from '@/lib/database.types'
-import type { CategoryWithRule } from '@/app/admin/users/page'
+import type { BankOverride, CategoryWithRule } from '@/app/admin/users/page'
+import { BANK_LIST } from '@/lib/constants'
 
 // ─── Helper ───────────────────────────────────────────────────
 
@@ -306,7 +307,6 @@ function OwnershipSection({ categories, admins }: OwnershipSectionProps) {
       const rule = Array.isArray(cat.routing_rules)
         ? cat.routing_rules[0] ?? null
         : cat.routing_rules
-      // Use assignee_emails if available, fall back to owner_email
       const emails = rule?.assignee_emails?.length
         ? rule.assignee_emails
         : rule?.owner_email ? [rule.owner_email] : []
@@ -314,6 +314,21 @@ function OwnershipSection({ categories, admins }: OwnershipSectionProps) {
     }
     return init
   })
+
+  // Per-row state: bank overrides
+  const [bankRows, setBankRows] = useState<Record<string, BankOverride[]>>(() => {
+    const init: Record<string, BankOverride[]> = {}
+    for (const cat of categories) {
+      const rule = Array.isArray(cat.routing_rules)
+        ? cat.routing_rules[0] ?? null
+        : cat.routing_rules
+      init[cat.id] = (rule?.bank_overrides as BankOverride[] | null) ?? []
+    }
+    return init
+  })
+
+  // Per-row state for the "add bank override" inline form
+  const [addBankForm, setAddBankForm] = useState<Record<string, { bank: string; email: string }>>({})
 
   const [savingId, setSavingId] = useState<string | null>(null)
 
@@ -325,17 +340,35 @@ function OwnershipSection({ categories, admins }: OwnershipSectionProps) {
     setRows(prev => ({ ...prev, [catId]: (prev[catId] ?? []).filter(e => e !== email) }))
   }
 
-  function savedEmails(cat: CategoryWithRule): string[] {
-    const rule = Array.isArray(cat.routing_rules)
+  function addBankOverride(catId: string, override: BankOverride) {
+    setBankRows(prev => ({ ...prev, [catId]: [...(prev[catId] ?? []), override] }))
+  }
+
+  function removeBankOverride(catId: string, bank: string) {
+    setBankRows(prev => ({ ...prev, [catId]: (prev[catId] ?? []).filter(o => o.bank !== bank) }))
+  }
+
+  function getRule(cat: CategoryWithRule) {
+    return Array.isArray(cat.routing_rules)
       ? cat.routing_rules[0] ?? null
       : cat.routing_rules
+  }
+
+  function savedEmails(cat: CategoryWithRule): string[] {
+    const rule = getRule(cat)
     return rule?.assignee_emails?.length
       ? rule.assignee_emails
       : rule?.owner_email ? [rule.owner_email] : []
   }
 
+  function savedBankOverrides(cat: CategoryWithRule): BankOverride[] {
+    return (getRule(cat)?.bank_overrides as BankOverride[] | null) ?? []
+  }
+
   function isDirty(cat: CategoryWithRule) {
-    return JSON.stringify(rows[cat.id] ?? []) !== JSON.stringify(savedEmails(cat))
+    const emailsDirty = JSON.stringify(rows[cat.id] ?? []) !== JSON.stringify(savedEmails(cat))
+    const bankDirty   = JSON.stringify(bankRows[cat.id] ?? []) !== JSON.stringify(savedBankOverrides(cat))
+    return emailsDirty || bankDirty
   }
 
   async function handleSave(cat: CategoryWithRule) {
@@ -349,7 +382,11 @@ function OwnershipSection({ categories, admins }: OwnershipSectionProps) {
       const res = await fetch('/api/admin/ownership', {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ category_id: cat.id, assignee_emails: emails }),
+        body:    JSON.stringify({
+          category_id:    cat.id,
+          assignee_emails: emails,
+          bank_overrides:  bankRows[cat.id] ?? [],
+        }),
         credentials: 'include',
       })
       const data = await res.json() as { error?: string }
@@ -377,18 +414,27 @@ function OwnershipSection({ categories, admins }: OwnershipSectionProps) {
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">
                   Responsables <span className="normal-case font-normal text-gray-400">(round-robin en orden)</span>
                 </th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Reglas por banco
+                </th>
                 <th className="py-3 px-4 w-24" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {categories.map(cat => {
-                const emails  = rows[cat.id] ?? []
-                const saving  = savingId === cat.id
-                const dirty   = isDirty(cat)
-                const available = admins.filter(a => !emails.includes(a.email))
+                const emails       = rows[cat.id] ?? []
+                const overrides    = bankRows[cat.id] ?? []
+                const saving       = savingId === cat.id
+                const dirty        = isDirty(cat)
+                const available    = admins.filter(a => !emails.includes(a.email))
+                const usedBanks    = overrides.map(o => o.bank)
+                const addForm      = addBankForm[cat.id] ?? { bank: '', email: '' }
+
                 return (
-                  <tr key={cat.id} className="hover:bg-gray-50/50">
-                    <td className="py-3 px-4 font-medium text-gray-900 align-top whitespace-nowrap">{cat.name}</td>
+                  <tr key={cat.id} className="hover:bg-gray-50/50 align-top">
+                    <td className="py-3 px-4 font-medium text-gray-900 whitespace-nowrap">{cat.name}</td>
+
+                    {/* Round-robin responsables */}
                     <td className="py-3 px-4">
                       <div className="flex flex-wrap gap-1.5 items-center">
                         {emails.map((email, i) => {
@@ -429,7 +475,88 @@ function OwnershipSection({ categories, admins }: OwnershipSectionProps) {
                         )}
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-right align-top">
+
+                    {/* Bank overrides */}
+                    <td className="py-3 px-4">
+                      <div className="flex flex-wrap gap-1.5 items-start">
+                        {/* Existing overrides */}
+                        {overrides.map(o => {
+                          const p     = admins.find(a => a.email === o.assignee_email)
+                          const label = p ? displayName(p) : o.assignee_email
+                          return (
+                            <span
+                              key={o.bank}
+                              className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 text-xs font-medium px-2.5 py-1 rounded-full border border-amber-200"
+                            >
+                              {o.bank} → {label}
+                              <button
+                                type="button"
+                                onClick={() => removeBankOverride(cat.id, o.bank)}
+                                className="ml-0.5 text-amber-600/60 hover:text-amber-800 font-bold leading-none"
+                                aria-label={`Eliminar regla ${o.bank}`}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          )
+                        })}
+
+                        {/* Add override inline form */}
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <select
+                            className="text-xs border border-dashed border-gray-300 rounded-full px-2.5 py-1 bg-transparent text-gray-400 cursor-pointer hover:border-gray-400 hover:text-gray-600 focus:outline-none"
+                            value={addForm.bank}
+                            onChange={e => setAddBankForm(prev => ({
+                              ...prev,
+                              [cat.id]: { bank: e.target.value, email: '' },
+                            }))}
+                          >
+                            <option value="">+ Banco</option>
+                            {BANK_LIST.filter(b => !usedBanks.includes(b)).map(b => (
+                              <option key={b} value={b}>{b}</option>
+                            ))}
+                          </select>
+
+                          {addForm.bank && (
+                            <>
+                              <span className="text-xs text-gray-400">→</span>
+                              <select
+                                className="text-xs border border-dashed border-gray-300 rounded-full px-2.5 py-1 bg-transparent text-gray-400 cursor-pointer hover:border-gray-400 hover:text-gray-600 focus:outline-none"
+                                value={addForm.email}
+                                onChange={e => setAddBankForm(prev => ({
+                                  ...prev,
+                                  [cat.id]: { ...addForm, email: e.target.value },
+                                }))}
+                              >
+                                <option value="">Responsable</option>
+                                {admins.map(a => (
+                                  <option key={a.id} value={a.email}>{displayName(a)}</option>
+                                ))}
+                              </select>
+
+                              {addForm.email && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    addBankOverride(cat.id, { bank: addForm.bank, assignee_email: addForm.email })
+                                    setAddBankForm(prev => ({ ...prev, [cat.id]: { bank: '', email: '' } }))
+                                  }}
+                                  className="text-xs px-2 py-0.5 rounded-full bg-[#083D20] text-white hover:bg-[#0a4d28] leading-5"
+                                >
+                                  +
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+
+                        {overrides.length === 0 && !addForm.bank && (
+                          <span className="text-xs text-gray-400 italic">Sin reglas</span>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="py-3 px-4 text-right">
                       <Button
                         onClick={() => handleSave(cat)}
                         isLoading={saving}
@@ -474,6 +601,9 @@ export function UserManagementClient({ profiles, currentUserId, categories }: Pr
         </div>
       </section>
 
+      {/* Ownership — above Usuarios */}
+      <OwnershipSection categories={categories} admins={admins} />
+
       {employees.length > 0 && (
         <section>
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
@@ -484,9 +614,6 @@ export function UserManagementClient({ profiles, currentUserId, categories }: Pr
           </div>
         </section>
       )}
-
-      {/* Ownership */}
-      <OwnershipSection categories={categories} admins={admins} />
     </div>
   )
 }

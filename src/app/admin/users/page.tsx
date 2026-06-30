@@ -7,6 +7,11 @@ import type { Profile } from '@/lib/database.types'
 
 export const metadata: Metadata = { title: 'Admin — Gestión de Usuarios' }
 
+export type BankOverride = {
+  bank:           string
+  assignee_email: string
+}
+
 export type CategoryWithRule = {
   id:   string
   name: string
@@ -15,6 +20,7 @@ export type CategoryWithRule = {
     owner_email:        string
     backup_owner_email: string | null
     assignee_emails:    string[] | null
+    bank_overrides:     BankOverride[] | null
     sla_hours:          number
     default_priority:   string
   }[]
@@ -31,7 +37,7 @@ export default async function UsersPage() {
       .order('first_name', { ascending: true }),
     admin
       .from('categories')
-      .select('id, name, routing_rules(id, owner_email, backup_owner_email, assignee_emails, sla_hours, default_priority)')
+      .select('id, name, routing_rules(id, owner_email, backup_owner_email, assignee_emails, bank_overrides, sla_hours, default_priority)')
       .eq('is_active', true)
       .order('name'),
   ])

@@ -40,7 +40,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  let body: { category_id: string; assignee_emails: string[]; owner_email?: string }
+  let body: { category_id: string; assignee_emails: string[]; bank_overrides?: { bank: string; assignee_email: string }[]; owner_email?: string }
   try { body = await request.json() } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
@@ -57,6 +57,7 @@ export async function PATCH(request: NextRequest) {
         category_id:     body.category_id,
         assignee_emails: body.assignee_emails,
         owner_email:     body.assignee_emails[0], // keep for backwards compat
+        bank_overrides:  body.bank_overrides ?? [],
       },
       { onConflict: 'category_id' },
     )
