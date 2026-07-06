@@ -94,23 +94,6 @@ export async function POST(
   const isSystemTicket  = ticketMeta?.created_by === null
   const isNotCreator    = ticketMeta?.created_by !== profile.id
 
-  // Access control: non-admins can only comment on tickets they created, follow,
-  // or that are system-created (created_by=NULL). Check this before insert.
-  if (profile.role !== 'admin') {
-    const isOwner = ticketMeta?.created_by === profile.id
-    if (!isOwner && !isSystemTicket) {
-      const { data: follower } = await admin
-        .from('ticket_followers')
-        .select('ticket_id')
-        .eq('ticket_id', id)
-        .eq('user_id', profile.id)
-        .maybeSingle()
-      if (!follower) {
-        return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
-      }
-    }
-  }
-
   // Auto-follow system tickets before insert so the ticket appears in "Mis Solicitudes"
   if (isSystemTicket && profile.role !== 'admin') {
     await admin

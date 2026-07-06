@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { requireProfile } from '@/lib/auth'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Navbar } from '@/components/layout/Navbar'
 import { StatusBadge } from '@/components/shared/StatusBadge'
@@ -21,7 +20,6 @@ interface Props {
 export default async function TicketDetailPage({ params }: Props) {
   const { id }      = await params
   const profile     = await requireProfile()
-  const supabase    = await createClient()
   const adminClient = createAdminClient()
 
   // Use admin client so system-created tickets (created_by=NULL) are always reachable.
@@ -47,20 +45,8 @@ export default async function TicketDetailPage({ params }: Props) {
 
   if (!ticket) notFound()
 
-  const isOwner    = ticket.created_by === profile.id
   const isSystem   = ticket.created_by === null
   const isAdmin    = profile.role === 'admin'
-
-  // Access control: own ticket | admin | system ticket | follower
-  if (!isOwner && !isAdmin && !isSystem) {
-    const { data: follower } = await adminClient
-      .from('ticket_followers')
-      .select('ticket_id')
-      .eq('ticket_id', id)
-      .eq('user_id', profile.id)
-      .maybeSingle()
-    if (!follower) notFound()
-  }
 
   // Auto-follow system tickets for non-admins:
   // • Makes the ticket appear in "Mis Solicitudes"
