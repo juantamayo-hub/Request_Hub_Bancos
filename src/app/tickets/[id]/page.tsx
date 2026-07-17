@@ -194,6 +194,7 @@ export default async function TicketDetailPage({ params }: Props) {
             <CommentThread
               comments={comments}
               currentProfileId={profile.id}
+              ticketId={id}
             />
             <div className="mt-4 pt-4 border-t border-gray-100">
               <AddCommentForm

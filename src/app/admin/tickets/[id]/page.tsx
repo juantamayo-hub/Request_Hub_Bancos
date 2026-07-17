@@ -193,7 +193,7 @@ export default async function AdminTicketDetailPage({ params }: Props) {
             {/* Comments */}
             <div className="card p-6 mb-6">
               <h2 className="font-semibold text-gray-900 mb-4">Comentarios</h2>
-              <CommentThread comments={comments} currentProfileId={profile.id} isAdmin />
+              <CommentThread comments={comments} currentProfileId={profile.id} isAdmin ticketId={id} />
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <AddCommentForm
                 ticketId={id}
