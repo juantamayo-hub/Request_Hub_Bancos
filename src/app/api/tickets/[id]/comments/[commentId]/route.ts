@@ -45,6 +45,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
 
   const admin = createAdminClient()
 
+  // Verify the comment belongs to this admin
+  const { data: existing } = await admin
+    .from('ticket_comments')
+    .select('author_id')
+    .eq('id', commentId)
+    .eq('ticket_id', ticketId)
+    .single()
+
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (existing.author_id !== profile.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const { data: comment, error } = await admin
     .from('ticket_comments')
     .update({ body, updated_at: new Date().toISOString() })
@@ -84,6 +95,17 @@ export async function DELETE(_request: NextRequest, { params }: { params: Params
   }
 
   const admin = createAdminClient()
+
+  // Verify the comment belongs to this admin
+  const { data: existing } = await admin
+    .from('ticket_comments')
+    .select('author_id')
+    .eq('id', commentId)
+    .eq('ticket_id', ticketId)
+    .single()
+
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (existing.author_id !== profile.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { error } = await admin
     .from('ticket_comments')

@@ -161,8 +161,8 @@ export function CommentThread({ comments, currentProfileId, isAdmin = false, tic
                 </span>
               )}
 
-              {/* Admin actions */}
-              {isAdmin && !isEditing && (
+              {/* Admin actions — only on own comments */}
+              {isAdmin && isMine && !isEditing && (
                 <div className="ml-auto flex items-center gap-1">
                   <button
                     onClick={() => startEdit(comment)}
