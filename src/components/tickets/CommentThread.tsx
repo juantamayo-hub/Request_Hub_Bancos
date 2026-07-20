@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { formatDate, displayName } from '@/lib/utils'
@@ -46,19 +46,41 @@ function TrashIcon() {
 
 export function CommentThread({ comments, currentProfileId, isAdmin = false, ticketId }: Props) {
   const router = useRouter()
-  const [editingId, setEditingId]     = useState<string | null>(null)
-  const [editBody, setEditBody]       = useState('')
-  const [deletingId, setDeletingId]   = useState<string | null>(null)
-  const [saving, setSaving]           = useState(false)
-  const [localComments, setLocalComments] = useState(comments)
+  const [editingId, setEditingId]   = useState<string | null>(null)
+  const [editBody, setEditBody]     = useState('')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [saving, setSaving]         = useState(false)
+  // Optimistic overrides: body edits and hidden (deleted) ids
+  // These are temporary until router.refresh() brings fresh server data
+  const [pendingEdits, setPendingEdits] = useState<Record<string, string>>({})
+  const [hiddenIds, setHiddenIds]       = useState<Set<string>>(new Set())
 
-  if (localComments.length === 0) {
+  // Clear stale optimistic overrides once server data catches up
+  useEffect(() => {
+    setPendingEdits(prev => {
+      const next = { ...prev }
+      for (const c of comments) {
+        if (next[c.id] !== undefined && next[c.id] === c.body) delete next[c.id]
+      }
+      return next
+    })
+    setHiddenIds(prev => {
+      if (prev.size === 0) return prev
+      const serverIds = new Set(comments.map(c => c.id))
+      const next = new Set([...prev].filter(id => serverIds.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [comments])
+
+  const visible = comments.filter(c => !hiddenIds.has(c.id))
+
+  if (visible.length === 0) {
     return <p className="text-sm text-gray-400 py-4">No comments yet.</p>
   }
 
   function startEdit(comment: TicketCommentWithAuthor) {
     setEditingId(comment.id)
-    setEditBody(comment.body)
+    setEditBody(pendingEdits[comment.id] ?? comment.body)
   }
 
   function cancelEdit() {
@@ -76,10 +98,8 @@ export function CommentThread({ comments, currentProfileId, isAdmin = false, tic
         body: JSON.stringify({ body: editBody.trim() }),
       })
       if (!res.ok) throw new Error('Failed')
-      const { comment: updated } = await res.json()
-      setLocalComments(prev =>
-        prev.map(c => c.id === commentId ? { ...c, body: updated.body, updated_at: updated.updated_at } : c)
-      )
+      // Optimistically show the new body until server data arrives
+      setPendingEdits(prev => ({ ...prev, [commentId]: editBody.trim() }))
       setEditingId(null)
       router.refresh()
     } catch {
@@ -97,7 +117,8 @@ export function CommentThread({ comments, currentProfileId, isAdmin = false, tic
         method: 'DELETE',
       })
       if (!res.ok) throw new Error('Failed')
-      setLocalComments(prev => prev.filter(c => c.id !== commentId))
+      // Optimistically hide until server data confirms deletion
+      setHiddenIds(prev => new Set([...prev, commentId]))
       router.refresh()
     } catch {
       alert('Error al eliminar el comentario. Inténtalo de nuevo.')
@@ -109,12 +130,13 @@ export function CommentThread({ comments, currentProfileId, isAdmin = false, tic
 
   return (
     <ol className="space-y-4">
-      {localComments.map(comment => {
+      {visible.map(comment => {
         const isMine      = comment.author_id === currentProfileId
         const isInternal  = comment.visibility === 'internal'
         const attachments = comment.attachments ?? []
         const isEditing   = editingId === comment.id
         const isDeleting  = deletingId === comment.id
+        const displayBody = pendingEdits[comment.id] ?? comment.body
 
         return (
           <li
@@ -216,7 +238,7 @@ export function CommentThread({ comments, currentProfileId, isAdmin = false, tic
               </div>
             ) : (
               <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
-                {comment.body}
+                {displayBody}
               </p>
             )}
 
