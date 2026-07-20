@@ -155,7 +155,10 @@ export async function POST(request: NextRequest) {
 
   if (insertErr || !ticket) {
     console.error('Ticket insert error:', insertErr)
-    return NextResponse.json({ error: 'Error al crear la solicitud' }, { status: 500 })
+    return NextResponse.json({
+      error: 'Error al crear la solicitud',
+      debug: insertErr ? { message: insertErr.message, code: insertErr.code, details: insertErr.details, hint: insertErr.hint } : 'ticket was null',
+    }, { status: 500 })
   }
 
   const categoryName = (rule as { categories?: { name: string } } | null)?.categories?.name ?? category_id

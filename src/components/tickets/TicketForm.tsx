@@ -214,7 +214,9 @@ export function TicketForm({ categories }: Props) {
       }
 
       if (!res.ok) {
-        toast.error(data.error ?? 'Error al crear la solicitud.')
+        const debugMsg = data.debug ? ` [${JSON.stringify(data.debug)}]` : ''
+        console.error('Ticket creation failed:', data)
+        toast.error((data.error ?? 'Error al crear la solicitud.') + debugMsg, { duration: 15000 })
         return
       }
 
