@@ -234,7 +234,7 @@ export default async function AdminTicketDetailPage({ params }: Props) {
                       <div className="absolute -left-1.5 mt-1.5 w-3 h-3 rounded-full bg-gray-300 border-2 border-white" />
                       <time className="text-xs text-gray-400">{formatDate(entry.created_at)}</time>
                       <p className="text-sm mt-0.5">
-                        <span className="font-medium">{displayName(entry.profiles)}</span>
+                        <span className="font-medium">{entry.profiles ? displayName(entry.profiles) : 'Sistema'}</span>
                         {' — '}
                         <span className="text-gray-600 capitalize">{entry.action.replace(/_/g, ' ')}</span>
                         {entry.from_value && entry.to_value && (

@@ -242,7 +242,7 @@ export async function GET(request: NextRequest) {
       await Promise.all([
         admin.from('audit_log').insert({
           ticket_id:  t.id,
-          actor_id:   '00000000-0000-0000-0000-000000000000',
+          actor_id:   null,
           action:     'status_changed',
           from_value: 'closed',
           to_value:   prevStatus,
@@ -250,7 +250,7 @@ export async function GET(request: NextRequest) {
         }),
         admin.from('ticket_comments').insert({
           ticket_id:  t.id,
-          author_id:  '00000000-0000-0000-0000-000000000000',
+          author_id:  null,
           body:       'Ticket reabierto automáticamente.',
           visibility: 'internal',
         }),
@@ -324,7 +324,7 @@ export async function GET(request: NextRequest) {
             admin.from('tickets').update({ status: 'closed' }).eq('id', ticket.id),
             admin.from('audit_log').insert({
               ticket_id:  ticket.id,
-              actor_id:   '00000000-0000-0000-0000-000000000000',
+              actor_id:   null,
               action:     'status_changed',
               from_value: ticket.status as string,
               to_value:   'closed',
@@ -333,14 +333,14 @@ export async function GET(request: NextRequest) {
             admin.from('ticket_status_history').insert({
               ticket_id:  ticket.id,
               status:     'closed',
-              changed_by: '00000000-0000-0000-0000-000000000000',
+              changed_by: null,
             }),
           ])
           // Only add the closure note once (dedup guard above ensures needsNote=false on re-runs)
           if (needsNote) {
             await admin.from('ticket_comments').insert({
               ticket_id:  ticket.id,
-              author_id:  '00000000-0000-0000-0000-000000000000',
+              author_id:  null,
               body:       closureNote,
               visibility: 'internal',
             })
@@ -451,7 +451,7 @@ export async function GET(request: NextRequest) {
         await Promise.all([
           admin.from('audit_log').insert({
             ticket_id:  ticket.id,
-            actor_id:   '00000000-0000-0000-0000-000000000000',
+            actor_id:   null,
             action:     'status_changed',
             from_value: ticket.status as string,
             to_value:   'closed',
@@ -460,11 +460,11 @@ export async function GET(request: NextRequest) {
           admin.from('ticket_status_history').insert({
             ticket_id:  ticket.id,
             status:     'closed',
-            changed_by: '00000000-0000-0000-0000-000000000000',
+            changed_by: null,
           }),
           admin.from('ticket_comments').insert({
             ticket_id:  ticket.id,
-            author_id:  '00000000-0000-0000-0000-000000000000',
+            author_id:  null,
             body:       `Ticket cerrado automáticamente. El deal ya no está en el stage de origen (${triggerStage}).`,
             visibility: 'internal',
           }),
@@ -517,7 +517,7 @@ export async function GET(request: NextRequest) {
     const { data: existingTickets } = await admin
       .from('tickets')
       .select('pipedrive_deal_id')
-      .in('status', ['new', 'in_progress', 'waiting_on_employee'])
+      .in('status', ['new', 'in_progress', 'waiting_on_employee', 'resolved'])
       .in('pipedrive_deal_id', overdueDealIds)
 
     const existingDealIds = new Set((existingTickets ?? []).map(t => t.pipedrive_deal_id))
