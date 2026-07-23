@@ -288,13 +288,13 @@ export async function POST(
           new:                  'Nuevo',
           in_progress:          'En Proceso',
           waiting_on_employee:  'Esperando',
-          resolved:             'Resuelto',
+          resolved:             'Solucionado',
           closed:               'Cerrado',
         }
-        const dateStr    = formatDateMadrid(new Date(comment.created_at))
-        const authorName = profile.first_name ?? profile.email.split('@')[0]
+        const dateStr     = formatDateMadrid(new Date(comment.created_at))
+        const authorName  = profile.first_name ?? profile.email.split('@')[0]
         const statusLabel = STATUS_LABELS[ticket.status] ?? ticket.status
-        const summaryLine = `${ticket.display_id} (${dateStr}) - ${authorName}: ${commentBody.trim()} [${statusLabel}]`
+        const summaryLine = `Ticket ID: ${ticket.display_id}|Date:${dateStr}|User:${authorName}|Comment:${commentBody.trim()}|Status:${statusLabel}`
         appendDealSummary(ticket.pipedrive_deal_id as number, summaryLine).catch(console.error)
       }
     }
