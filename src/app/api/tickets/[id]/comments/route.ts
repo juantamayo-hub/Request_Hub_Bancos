@@ -194,7 +194,7 @@ export async function POST(
     // Fetch ticket scalar fields (no FK-hint joins to avoid PostgREST schema-cache issues).
     const { data: ticket, error: ticketFetchErr } = await admin
       .from('tickets')
-      .select('display_id, subject, created_by, assignee_id, pipedrive_deal_id')
+      .select('display_id, subject, status, created_by, assignee_id, pipedrive_deal_id')
       .eq('id', id)
       .single()
 
@@ -284,9 +284,17 @@ export async function POST(
 
       // Append comment to FIELD_DEAL_SUMMARY (public comments on deal-linked tickets)
       if (ticket.pipedrive_deal_id) {
+        const STATUS_LABELS: Record<string, string> = {
+          new:                  'Nuevo',
+          in_progress:          'En Proceso',
+          waiting_on_employee:  'Esperando',
+          resolved:             'Resuelto',
+          closed:               'Cerrado',
+        }
         const dateStr    = formatDateMadrid(new Date(comment.created_at))
         const authorName = profile.first_name ?? profile.email.split('@')[0]
-        const summaryLine = `${ticket.display_id} (${dateStr}) - ${authorName}: ${commentBody.trim()}`
+        const statusLabel = STATUS_LABELS[ticket.status] ?? ticket.status
+        const summaryLine = `${ticket.display_id} (${dateStr}) - ${authorName}: ${commentBody.trim()} [${statusLabel}]`
         appendDealSummary(ticket.pipedrive_deal_id as number, summaryLine).catch(console.error)
       }
     }
