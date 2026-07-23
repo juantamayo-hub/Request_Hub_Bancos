@@ -124,6 +124,30 @@ export async function updateDealField(dealId: number, fieldKey: string, value: u
   }
 }
 
+// ─── Append line to FIELD_DEAL_SUMMARY ───────────────────────
+//
+// Fetches the current summary value from Pipedrive, prepends `newLine`
+// (blank-line-separated), and writes it back. Safe to call fire-and-forget.
+
+export async function appendDealSummary(dealId: number, newLine: string): Promise<void> {
+  try {
+    const res = await fetch(
+      `${BASE_URL}/deals/${dealId}?api_token=${API_TOKEN}`,
+      { signal: AbortSignal.timeout(8_000), cache: 'no-store' },
+    )
+    if (!res.ok) {
+      console.error(`[pipedrive] appendDealSummary: fetch deal ${dealId} failed (${res.status})`)
+      return
+    }
+    const json = await res.json()
+    const current: string | null = json.data?.[FIELD_DEAL_SUMMARY] ?? null
+    const updated = current ? `${newLine}\n\n${current}` : newLine
+    await updateDealField(dealId, FIELD_DEAL_SUMMARY, updated)
+  } catch (err) {
+    console.error(`[pipedrive] appendDealSummary(${dealId}) error:`, err)
+  }
+}
+
 // ─── Fetch deal stage_id ──────────────────────────────────────
 
 export async function fetchDealStageId(dealId: number): Promise<number | null> {

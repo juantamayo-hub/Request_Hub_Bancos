@@ -2,7 +2,21 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notifyNewComment } from '@/lib/notifications'
-import { updateDealField, createDealNote, FIELD_CLAIM_CHANNEL, CLAIM_CHANNEL_IDS } from '@/lib/pipedrive'
+import { updateDealField, createDealNote, appendDealSummary, FIELD_CLAIM_CHANNEL, CLAIM_CHANNEL_IDS } from '@/lib/pipedrive'
+
+function formatDateMadrid(date: Date): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Madrid',
+    day:    '2-digit',
+    month:  'short',
+    year:   'numeric',
+    hour:   '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date)
+  const get = (type: string) => parts.find(p => p.type === type)?.value ?? ''
+  return `${get('day')} ${get('month')} ${get('year')}, ${get('hour')}:${get('minute')}`
+}
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
@@ -266,6 +280,14 @@ export async function POST(
         const authorName = profile.first_name ?? profile.email
         const noteContent = `💬 ${authorName} dejó un comentario en ${ticket.display_id} — ${ticket.subject}\n\nVer ticket: ${appUrl}/tickets/${id}`
         createDealNote(ticket.pipedrive_deal_id as number, noteContent).catch(console.error)
+      }
+
+      // Append comment to FIELD_DEAL_SUMMARY (public comments on deal-linked tickets)
+      if (ticket.pipedrive_deal_id) {
+        const dateStr    = formatDateMadrid(new Date(comment.created_at))
+        const authorName = profile.first_name ?? profile.email.split('@')[0]
+        const summaryLine = `${ticket.display_id} (${dateStr}) - ${authorName}: ${commentBody.trim()}`
+        appendDealSummary(ticket.pipedrive_deal_id as number, summaryLine).catch(console.error)
       }
     }
   }
