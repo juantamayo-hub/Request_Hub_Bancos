@@ -223,5 +223,18 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // ─── Kutxabank "Nuevo envío" → n8n webhook (fire-and-forget) ──
+  if (
+    categoryName === 'Nuevo envío' &&
+    bank_name.trim().toLowerCase().includes('kutxabank') &&
+    pipedrive_deal_id
+  ) {
+    fetch('https://huspy.app.n8n.cloud/webhook/kutxabank-nuevo-envio', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dealId: pipedrive_deal_id }),
+    }).catch(err => console.error('Kutxabank nuevo envío webhook error:', err))
+  }
+
   return NextResponse.json({ ticket }, { status: 201 })
 }
