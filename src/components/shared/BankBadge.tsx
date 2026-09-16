@@ -6,25 +6,19 @@ import { cn } from '@/lib/utils'
  * Logo files are 128×128 PNGs.
  */
 const BANK_LOGO: Record<string, string> = {
+  // Real favicon PNGs
   'Santander':      '/banks/santander.png',
   'Unicaja':        '/banks/unicaja.png',
   'CR Teruel':      '/banks/cr-teruel.png',
   'CR Granada':     '/banks/cr-granada.png',
-  'Laboral Kutxa':  '/banks/laboral-kutxa.png',
-  'EuroCajaRural':  '/banks/eurocajarural.png',
   'ING':            '/banks/ing.png',
-  'CR Extremadura': '/banks/cr-extremadura.png',
-  'CR Asturias':    '/banks/cr-asturias.png',
   'Deutsche Bank':  '/banks/deutsche-bank.png',
   'UCI':            '/banks/uci.png',
   'MyInvestor':     '/banks/myinvestor.png',
-  'CR del Sur':     '/banks/cr-del-sur.png',
   'Globalcaja':     '/banks/globalcaja.png',
   'Ibercaja':       '/banks/ibercaja.png',
   'No Bank Fee':    '/banks/no-bank-fee.png',
-  'Caixa Popular':  '/banks/caixa-popular.png',
   'Ruralnostra':    '/banks/ruralnostra.png',
-  'Kutxabank':      '/banks/kutxabank.png',
   'Sabadell':       '/banks/sabadell.png',
   'BBVA':           '/banks/bbva.png',
   'CaixaBank':      '/banks/caixabank.png',
@@ -32,11 +26,19 @@ const BANK_LOGO: Record<string, string> = {
   'Abanca':         '/banks/abanca.png',
   'Openbank':       '/banks/openbank.png',
   'Cajamar':        '/banks/cajamar.png',
-  'EVO Banco':      '/banks/evo-banco.png',
   'Liberbank':      '/banks/liberbank.png',
   'Pibank':         '/banks/pibank.png',
   'Targobank':      '/banks/targobank.png',
-  'WiZink':         '/banks/wizink.png',
+  // Branded SVGs (banks without accessible favicons)
+  'Kutxabank':      '/banks/kutxabank.svg',
+  'EVO Banco':      '/banks/evo-banco.svg',
+  'EuroCajaRural':  '/banks/eurocajarural.svg',
+  'CR Asturias':    '/banks/cr-asturias.svg',
+  'CR del Sur':     '/banks/cr-del-sur.svg',
+  'CR Extremadura': '/banks/cr-extremadura.svg',
+  'Laboral Kutxa':  '/banks/laboral-kutxa.svg',
+  'Caixa Popular':  '/banks/caixa-popular.svg',
+  'WiZink':         '/banks/wizink.svg',
 }
 
 function getLogo(bankName: string): string | null {
