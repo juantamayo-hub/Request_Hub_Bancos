@@ -45,13 +45,13 @@ export function OwnerWorkload({ rows, emptyMsg = 'Sin datos' }: { rows: OwnerEnt
               )}
               {row.in_progress > 0 && (
                 <div
-                  className="h-full bg-amber-400 transition-all"
+                  className="h-full bg-violet-400 transition-all"
                   style={{ width: `${Math.max((row.in_progress / maxTotal) * 100, 2)}%` }}
                 />
               )}
               {row.waiting > 0 && (
                 <div
-                  className="h-full bg-purple-300 transition-all"
+                  className="h-full bg-amber-300 transition-all"
                   style={{ width: `${Math.max((row.waiting / maxTotal) * 100, 2)}%` }}
                 />
               )}
@@ -69,10 +69,10 @@ export function OwnerWorkload({ rows, emptyMsg = 'Sin datos' }: { rows: OwnerEnt
                 <span className="text-[11px] text-blue-500 tabular-nums">{row.new} nuevo{row.new !== 1 ? 's' : ''}</span>
               )}
               {row.in_progress > 0 && (
-                <span className="text-[11px] text-amber-500 tabular-nums">{row.in_progress} en proceso</span>
+                <span className="text-[11px] text-violet-500 tabular-nums">{row.in_progress} en proceso</span>
               )}
               {row.waiting > 0 && (
-                <span className="text-[11px] text-purple-400 tabular-nums">{row.waiting} esperando</span>
+                <span className="text-[11px] text-amber-500 tabular-nums">{row.waiting} esperando</span>
               )}
             </div>
           </div>
@@ -86,11 +86,11 @@ export function OwnerWorkload({ rows, emptyMsg = 'Sin datos' }: { rows: OwnerEnt
           <span className="text-xs text-gray-400">Nuevo</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-sm bg-amber-400" />
+          <div className="w-2.5 h-2.5 rounded-sm bg-violet-400" />
           <span className="text-xs text-gray-400">En proceso</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-sm bg-purple-300" />
+          <div className="w-2.5 h-2.5 rounded-sm bg-amber-300" />
           <span className="text-xs text-gray-400">Esperando</span>
         </div>
         <div className="flex items-center gap-1.5">

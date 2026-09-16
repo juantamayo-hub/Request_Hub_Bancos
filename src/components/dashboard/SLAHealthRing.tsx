@@ -27,7 +27,7 @@ export function SLAHealthRing({ openTickets, slaBreaching }: Props) {
           width={120}
           height={120}
           viewBox="0 0 120 120"
-          aria-label={`SLA Compliance: ${compliance}%`}
+          aria-label={`Cumplimiento SLA: ${compliance}%`}
         >
           {/* Background track */}
           <circle
@@ -72,7 +72,7 @@ export function SLAHealthRing({ openTickets, slaBreaching }: Props) {
             fill="#9ca3af"
             fontFamily="system-ui, sans-serif"
           >
-            SLA Compliance
+            Cumplimiento SLA
           </text>
         </svg>
 
@@ -87,12 +87,12 @@ export function SLAHealthRing({ openTickets, slaBreaching }: Props) {
       {slaBreaching > 0 ? (
         <div className="mt-2 px-2.5 py-0.5 bg-amber-50 border border-amber-200 rounded-full">
           <span className="text-xs font-medium text-amber-700">
-            {slaBreaching} ticket{slaBreaching !== 1 ? 's' : ''} at risk
+            {slaBreaching} ticket{slaBreaching !== 1 ? 's' : ''} en riesgo
           </span>
         </div>
       ) : (
         <p className={`mt-2 text-xs font-medium ${isHealthy ? 'text-green-600' : 'text-amber-600'}`}>
-          {isHealthy ? 'On track' : 'Needs attention'}
+          {isHealthy ? 'En orden' : 'Requiere atención'}
         </p>
       )}
     </div>

@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import { formatDate, displayName } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import { Avatar } from '@/components/shared/Avatar'
 import type { TicketCommentWithAuthor } from '@/lib/database.types'
 
 interface Props {
@@ -75,7 +75,7 @@ export function CommentThread({ comments, currentProfileId, isAdmin = false, tic
   const visible = comments.filter(c => !hiddenIds.has(c.id))
 
   if (visible.length === 0) {
-    return <p className="text-sm text-gray-400 py-4">No comments yet.</p>
+    return <p className="text-sm text-gray-400 py-4">Aún no hay comentarios.</p>
   }
 
   function startEdit(comment: TicketCommentWithAuthor) {
@@ -150,25 +150,16 @@ export function CommentThread({ comments, currentProfileId, isAdmin = false, tic
           >
             {/* Header */}
             <div className="flex items-center gap-2 mb-2">
-              {comment.profiles?.avatar_url ? (
-                <Image
-                  src={comment.profiles.avatar_url}
-                  alt=""
-                  width={24}
-                  height={24}
-                  className="rounded-full"
-                />
-              ) : (
-                <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs font-medium text-gray-600">
-                  {comment.profiles
-                    ? (comment.profiles.first_name?.[0] ?? comment.profiles.email[0]).toUpperCase()
-                    : '?'}
-                </div>
-              )}
+              <Avatar
+                name={comment.profiles?.first_name}
+                email={comment.profiles?.email}
+                avatarUrl={comment.profiles?.avatar_url}
+                size="sm"
+              />
 
               <span className="font-medium text-gray-800">
                 {comment.profiles ? displayName(comment.profiles) : 'Sistema'}
-                {isMine && <span className="text-gray-400 font-normal"> (you)</span>}
+                {isMine && <span className="text-gray-400 font-normal"> (tú)</span>}
               </span>
 
               <span className="text-gray-400">·</span>
@@ -179,7 +170,7 @@ export function CommentThread({ comments, currentProfileId, isAdmin = false, tic
 
               {isAdmin && isInternal && (
                 <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">
-                  Internal
+                  Interno
                 </span>
               )}
 

@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { displayName } from '@/lib/utils'
 import type { Profile } from '@/lib/database.types'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { Avatar } from '@/components/shared/Avatar'
 
 interface Props {
   profile: Profile
@@ -15,6 +16,7 @@ interface Props {
 
 export function Navbar({ profile, isAdmin = false }: Props) {
   const router = useRouter()
+  const pathname = usePathname()
 
   const handleSignOut = async () => {
     const supabase = createClient()
@@ -58,35 +60,29 @@ export function Navbar({ profile, isAdmin = false }: Props) {
           </Link>
 
           <nav className="flex items-center gap-1 text-sm">
-            <Link
-              href="/tickets"
-              className="px-3 py-1.5 rounded-md text-gray-600 hover:bg-[#E8F2EC] hover:text-[#083D20] transition-colors"
-            >
-              Mis Solicitudes
-            </Link>
-
-            {isAdmin && (
-              <>
-                <Link
-                  href="/admin/tickets"
-                  className="px-3 py-1.5 rounded-md text-gray-600 hover:bg-[#E8F2EC] hover:text-[#083D20] transition-colors"
-                >
-                  Todos los Tickets
-                </Link>
-                <Link
-                  href="/dashboard"
-                  className="px-3 py-1.5 rounded-md text-gray-600 hover:bg-[#E8F2EC] hover:text-[#083D20] transition-colors"
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  href="/admin/users"
-                  className="px-3 py-1.5 rounded-md text-gray-600 hover:bg-[#E8F2EC] hover:text-[#083D20] transition-colors"
-                >
-                  Usuarios
-                </Link>
-              </>
-            )}
+            {[
+              { href: '/tickets', label: 'Mis Solicitudes', admin: false },
+              { href: '/admin/tickets', label: 'Todos los Tickets', admin: true },
+              { href: '/dashboard', label: 'Dashboard', admin: true },
+              { href: '/admin/users', label: 'Usuarios', admin: true },
+            ]
+              .filter(l => !l.admin || isAdmin)
+              .map(l => {
+                const active = pathname === l.href || pathname.startsWith(l.href + '/')
+                return (
+                  <Link
+                    key={l.href}
+                    href={l.href}
+                    className={
+                      active
+                        ? 'px-3 py-1.5 rounded-md bg-[#E8F2EC] text-[#083D20] font-medium transition-colors'
+                        : 'px-3 py-1.5 rounded-md text-gray-600 hover:bg-[#E8F2EC] hover:text-[#083D20] transition-colors'
+                    }
+                  >
+                    {l.label}
+                  </Link>
+                )
+              })}
           </nav>
         </div>
 
@@ -100,19 +96,12 @@ export function Navbar({ profile, isAdmin = false }: Props) {
           )}
 
           <div className="flex items-center gap-2">
-            {profile.avatar_url ? (
-              <Image
-                src={profile.avatar_url}
-                alt={displayName(profile)}
-                width={28}
-                height={28}
-                className="rounded-full"
-              />
-            ) : (
-              <div className="w-7 h-7 rounded-full bg-[#E8F2EC] flex items-center justify-center text-xs font-medium text-[#083D20]">
-                {(profile.first_name?.[0] ?? profile.email[0]).toUpperCase()}
-              </div>
-            )}
+            <Avatar
+              name={profile.first_name}
+              email={profile.email}
+              avatarUrl={profile.avatar_url}
+              size="md"
+            />
             <span className="text-sm text-gray-700 hidden sm:block">
               {displayName(profile)}
             </span>

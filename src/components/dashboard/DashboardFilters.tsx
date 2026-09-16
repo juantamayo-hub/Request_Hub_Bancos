@@ -77,9 +77,12 @@ export function DashboardFilters({ banks, categories, defaultFrom, defaultTo }: 
       {(from || to || bank || category) && (
         <button
           onClick={() => router.push(pathname)}
-          className="text-xs text-gray-400 hover:text-gray-600 underline ml-1"
+          className="inline-flex items-center gap-1 h-7 px-2.5 text-xs font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors ml-1"
         >
-          Limpiar filtros
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          Limpiar
         </button>
       )}
     </div>

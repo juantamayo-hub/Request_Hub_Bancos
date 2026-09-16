@@ -44,14 +44,14 @@ function TrendArrow({
 }) {
   if (prev === 0) return null
   const delta = ((current - prev) / prev) * 100
-  if (Math.abs(delta) < 1) return <span className="text-xs text-gray-400">No change</span>
+  if (Math.abs(delta) < 1) return <span className="text-xs text-gray-400">Sin cambio</span>
   const isUp = delta > 0
   const isGood = invertGood ? !isUp : isUp
   const arrow = isUp ? '↑' : '↓'
   const color = isGood ? 'text-green-600' : 'text-red-500'
   return (
     <span className={`text-xs ${color}`}>
-      {arrow} {Math.abs(Math.round(delta))}% vs last week
+      {arrow} {Math.abs(Math.round(delta))}% vs sem. anterior
     </span>
   )
 }
@@ -77,7 +77,7 @@ export function CommandStrip({ metrics: m }: Props) {
       {/* Open Tickets */}
       <div className="px-6 py-5 hover:bg-gray-50/60 transition-colors">
         <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-          Open Tickets
+          Tickets Abiertos
         </p>
         <div className="flex items-end justify-between gap-2">
           <p
@@ -99,7 +99,7 @@ export function CommandStrip({ metrics: m }: Props) {
       {/* SLA Breaching */}
       <div className="px-6 py-5 hover:bg-gray-50/60 transition-colors">
         <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-          SLA Breaching
+          SLA Vencido
         </p>
         <p
           className={`text-4xl font-bold tabular-nums leading-none ${
@@ -110,7 +110,7 @@ export function CommandStrip({ metrics: m }: Props) {
         </p>
         <div className="mt-2">
           {m.slaBreaching === 0 ? (
-            <span className="text-xs text-green-600">All SLAs met</span>
+            <span className="text-xs text-green-600">Todos los SLAs cumplidos</span>
           ) : (
             <TrendArrow
               current={m.slaBreaching}
@@ -124,7 +124,7 @@ export function CommandStrip({ metrics: m }: Props) {
       {/* Avg Resolution */}
       <div className="px-6 py-5 hover:bg-gray-50/60 transition-colors">
         <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-          Avg Resolution
+          Resolución Media
         </p>
         <p className="text-4xl font-bold tabular-nums leading-none text-gray-900">
           {m.avgResolutionDays}
@@ -135,10 +135,10 @@ export function CommandStrip({ metrics: m }: Props) {
             <span
               className={`text-xs ${resolutionDelta > 0 ? 'text-green-600' : 'text-red-500'}`}
             >
-              {resolutionDelta > 0 ? '↓' : '↑'} {Math.abs(resolutionDelta).toFixed(1)}d vs last week
+              {resolutionDelta > 0 ? '↓' : '↑'} {Math.abs(resolutionDelta).toFixed(1)}d vs sem. anterior
             </span>
           ) : (
-            <span className="text-xs text-gray-400">No change</span>
+            <span className="text-xs text-gray-400">Sin cambio</span>
           )}
         </div>
       </div>
@@ -146,7 +146,7 @@ export function CommandStrip({ metrics: m }: Props) {
       {/* Ticket Velocity */}
       <div className="px-6 py-5 hover:bg-gray-50/60 transition-colors">
         <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-          This Week
+          Esta Semana
         </p>
         <p
           className={`text-4xl font-bold tabular-nums leading-none ${
@@ -157,14 +157,14 @@ export function CommandStrip({ metrics: m }: Props) {
           {netVelocity}
         </p>
         <div className="mt-2 flex items-center gap-2">
-          <span className="text-xs text-gray-500">{thisWeekOpened} opened</span>
+          <span className="text-xs text-gray-500">{thisWeekOpened} abiertos</span>
           <span className="text-xs text-gray-300">·</span>
           <span
             className={`text-xs ${
               thisWeekClosed >= thisWeekOpened ? 'text-green-600' : 'text-gray-500'
             }`}
           >
-            {thisWeekClosed} closed
+            {thisWeekClosed} cerrados
           </span>
         </div>
       </div>

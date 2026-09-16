@@ -42,7 +42,7 @@ export function AddCommentForm({ ticketId, isAdmin = false, pipedriveDealId }: P
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!body.trim()) { toast.error('Comment cannot be empty.'); return }
+    if (!body.trim()) { toast.error('El comentario no puede estar vacío.'); return }
 
     setLoading(true)
     try {
@@ -60,17 +60,17 @@ export function AddCommentForm({ ticketId, isAdmin = false, pipedriveDealId }: P
 
       const data = await res.json()
       if (!res.ok) {
-        toast.error(data.error ?? 'Failed to post comment.')
+        toast.error(data.error ?? 'Error al publicar el comentario.')
         return
       }
 
-      toast.success('Comment posted.')
+      toast.success('Comentario publicado.')
       setBody('')
       setFiles([])
       setClaimChannel('N/A')
       router.refresh()
     } catch {
-      toast.error('Connection error. Check your network and try again.')
+      toast.error('Error de conexión. Revisa tu red e inténtalo de nuevo.')
     } finally {
       setLoading(false)
     }
@@ -81,8 +81,8 @@ export function AddCommentForm({ ticketId, isAdmin = false, pipedriveDealId }: P
       <Textarea
         placeholder={
           isAdmin
-            ? 'Add a comment… Use "Internal" for notes only visible to the team.'
-            : 'Add a reply…'
+            ? 'Escribe un comentario… Usa "Interno" para notas solo visibles para el equipo.'
+            : 'Escribe una respuesta…'
         }
         rows={3}
         value={body}
@@ -118,7 +118,7 @@ export function AddCommentForm({ ticketId, isAdmin = false, pipedriveDealId }: P
           <select
             value={claimChannel}
             onChange={e => setClaimChannel(e.target.value)}
-            className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-gray-900"
+            className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#083D20]"
           >
             <option value="N/A">N/A</option>
             <option value="Phone">Teléfono</option>
@@ -130,7 +130,7 @@ export function AddCommentForm({ ticketId, isAdmin = false, pipedriveDealId }: P
 
       <div className="flex items-center gap-3">
         <Button type="submit" size="sm" isLoading={loading}>
-          Post comment
+          Publicar
         </Button>
 
         {/* Attach file button — admin only */}
@@ -144,7 +144,7 @@ export function AddCommentForm({ ticketId, isAdmin = false, pipedriveDealId }: P
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
               </svg>
-              Attach files
+              Adjuntar archivos
             </button>
             <input
               ref={fileInputRef}
@@ -159,14 +159,14 @@ export function AddCommentForm({ ticketId, isAdmin = false, pipedriveDealId }: P
 
         {isAdmin && (
           <div className="flex items-center gap-2 ml-auto">
-            <label className="text-xs text-gray-500 font-medium">Visibility</label>
+            <label className="text-xs text-gray-500 font-medium">Visibilidad</label>
             <select
               value={visibility}
               onChange={e => setVisibility(e.target.value as 'public' | 'internal')}
-              className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-gray-900"
+              className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#083D20]"
             >
-              <option value="public">Public (visible to requester)</option>
-              <option value="internal">Internal (team only)</option>
+              <option value="public">Público (visible para el solicitante)</option>
+              <option value="internal">Interno (solo equipo)</option>
             </select>
           </div>
         )}

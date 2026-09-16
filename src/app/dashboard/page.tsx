@@ -38,7 +38,7 @@ export default async function DashboardPage({
         <Navbar profile={profile} isAdmin />
         <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
           <div className="mb-6">
-            <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
             <p className="text-sm text-gray-400 mt-0.5">Métricas de negocio</p>
           </div>
           <DashboardTabSwitcher active="negocio" />
@@ -312,7 +312,7 @@ export default async function DashboardPage({
         {/* Header */}
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
             <p className="text-sm text-gray-400 mt-0.5">Resumen operativo</p>
           </div>
           <a

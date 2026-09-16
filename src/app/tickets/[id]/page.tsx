@@ -11,7 +11,7 @@ import { CancelTicketButton } from '@/components/tickets/CancelTicketButton'
 import { formatDate, displayName, isSlaBreaching } from '@/lib/utils'
 import type { TicketWithRelations, TicketCommentWithAuthor } from '@/lib/database.types'
 
-export const metadata: Metadata = { title: 'Ticket Detail' }
+export const metadata: Metadata = { title: 'Detalle de Solicitud' }
 
 interface Props {
   params: Promise<{ id: string }>

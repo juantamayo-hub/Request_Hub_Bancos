@@ -206,9 +206,19 @@ export default async function AdminTicketDetailPage({ params }: Props) {
             {/* Satisfaction feedback */}
             {feedback && (
               <div className="card p-6 mb-6">
-                <h2 className="font-semibold text-gray-900 mb-3">Satisfaction Feedback</h2>
+                <h2 className="font-semibold text-gray-900 mb-3">Valoración del Solicitante</h2>
                 <div className="flex items-center gap-3">
-                  <span className={`text-2xl`}>{feedback.satisfied ? '👍' : '👎'}</span>
+                  <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full ${feedback.satisfied ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-500'}`}>
+                    {feedback.satisfied ? (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017a2 2 0 01-.632-.103l-3.614-1.21V12l3-6a2 2 0 012-1h.5a2 2 0 012 2v3z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.737 3h4.017a2 2 0 01.632.103l3.614 1.21V12l-3 6a2 2 0 01-2 1h-.5a2 2 0 01-2-2v-3z" />
+                      </svg>
+                    )}
+                  </span>
                   <div>
                     <p className="font-medium text-sm">{feedback.satisfied ? 'Satisfecho' : 'No satisfecho'}</p>
                     <p className="text-xs text-gray-400">{formatDate(feedback.created_at)}</p>
