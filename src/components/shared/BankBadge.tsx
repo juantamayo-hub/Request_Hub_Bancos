@@ -1,83 +1,79 @@
+import Image from 'next/image'
 import { cn } from '@/lib/utils'
 
 /**
- * Brand colors and short labels for each bank.
- * bg = background class, text = text class, short = 2-3 char abbreviation
+ * Maps bank names to their logo file in /public/banks/.
+ * Logo files are 128×128 PNGs.
  */
-const BANK_META: Record<string, { bg: string; text: string; short: string }> = {
-  // Original BANK_LIST
-  'Santander':      { bg: 'bg-red-600',      text: 'text-white', short: 'SAN' },
-  'Unicaja':        { bg: 'bg-green-700',    text: 'text-white', short: 'UNI' },
-  'CR Teruel':      { bg: 'bg-emerald-700',  text: 'text-white', short: 'CRT' },
-  'CR Granada':     { bg: 'bg-emerald-600',  text: 'text-white', short: 'CRG' },
-  'Laboral Kutxa':  { bg: 'bg-orange-500',   text: 'text-white', short: 'LK' },
-  'EuroCajaRural':  { bg: 'bg-blue-800',     text: 'text-white', short: 'ECR' },
-  'ING':            { bg: 'bg-orange-600',    text: 'text-white', short: 'ING' },
-  'CR Extremadura': { bg: 'bg-teal-700',     text: 'text-white', short: 'CRE' },
-  'CR Asturias':    { bg: 'bg-teal-600',     text: 'text-white', short: 'CRA' },
-  'Deutsche Bank':  { bg: 'bg-blue-900',     text: 'text-white', short: 'DB' },
-  'UCI':            { bg: 'bg-indigo-700',    text: 'text-white', short: 'UCI' },
-  'MyInvestor':     { bg: 'bg-cyan-600',     text: 'text-white', short: 'MYI' },
-  'CR del Sur':     { bg: 'bg-lime-700',     text: 'text-white', short: 'CRS' },
-  'Globalcaja':     { bg: 'bg-yellow-600',   text: 'text-white', short: 'GLO' },
-  'Ibercaja':       { bg: 'bg-purple-700',   text: 'text-white', short: 'IBC' },
-  'No Bank Fee':    { bg: 'bg-gray-500',     text: 'text-white', short: 'NBF' },
-  'Caixa Popular':  { bg: 'bg-sky-700',      text: 'text-white', short: 'CP' },
-  'Ruralnostra':    { bg: 'bg-amber-700',    text: 'text-white', short: 'RN' },
-  // Additional banks from Pipedrive data
-  'Kutxabank':      { bg: 'bg-blue-700',     text: 'text-white', short: 'KTX' },
-  'Sabadell':       { bg: 'bg-sky-800',      text: 'text-white', short: 'SAB' },
-  'BBVA':           { bg: 'bg-blue-600',     text: 'text-white', short: 'BBVA' },
-  'CaixaBank':      { bg: 'bg-teal-800',     text: 'text-white', short: 'CXB' },
-  'Bankinter':      { bg: 'bg-orange-700',   text: 'text-white', short: 'BKT' },
-  'Abanca':         { bg: 'bg-violet-700',   text: 'text-white', short: 'ABA' },
-  'Openbank':       { bg: 'bg-red-500',      text: 'text-white', short: 'OPB' },
-  'Cajamar':        { bg: 'bg-green-600',    text: 'text-white', short: 'CJM' },
-  'EVO Banco':      { bg: 'bg-orange-800',   text: 'text-white', short: 'EVO' },
-  'Liberbank':      { bg: 'bg-green-800',    text: 'text-white', short: 'LIB' },
-  'Pibank':         { bg: 'bg-pink-600',     text: 'text-white', short: 'PIB' },
-  'Targobank':      { bg: 'bg-blue-500',     text: 'text-white', short: 'TRG' },
-  'WiZink':         { bg: 'bg-yellow-500',   text: 'text-white', short: 'WIZ' },
+const BANK_LOGO: Record<string, string> = {
+  'Santander':      '/banks/santander.png',
+  'Unicaja':        '/banks/unicaja.png',
+  'CR Teruel':      '/banks/cr-teruel.png',
+  'CR Granada':     '/banks/cr-granada.png',
+  'Laboral Kutxa':  '/banks/laboral-kutxa.png',
+  'EuroCajaRural':  '/banks/eurocajarural.png',
+  'ING':            '/banks/ing.png',
+  'CR Extremadura': '/banks/cr-extremadura.png',
+  'CR Asturias':    '/banks/cr-asturias.png',
+  'Deutsche Bank':  '/banks/deutsche-bank.png',
+  'UCI':            '/banks/uci.png',
+  'MyInvestor':     '/banks/myinvestor.png',
+  'CR del Sur':     '/banks/cr-del-sur.png',
+  'Globalcaja':     '/banks/globalcaja.png',
+  'Ibercaja':       '/banks/ibercaja.png',
+  'No Bank Fee':    '/banks/no-bank-fee.png',
+  'Caixa Popular':  '/banks/caixa-popular.png',
+  'Ruralnostra':    '/banks/ruralnostra.png',
+  'Kutxabank':      '/banks/kutxabank.png',
+  'Sabadell':       '/banks/sabadell.png',
+  'BBVA':           '/banks/bbva.png',
+  'CaixaBank':      '/banks/caixabank.png',
+  'Bankinter':      '/banks/bankinter.png',
+  'Abanca':         '/banks/abanca.png',
+  'Openbank':       '/banks/openbank.png',
+  'Cajamar':        '/banks/cajamar.png',
+  'EVO Banco':      '/banks/evo-banco.png',
+  'Liberbank':      '/banks/liberbank.png',
+  'Pibank':         '/banks/pibank.png',
+  'Targobank':      '/banks/targobank.png',
+  'WiZink':         '/banks/wizink.png',
 }
 
-/** Auto-generate abbreviation from any bank name (first letters of each word) */
-function autoShort(name: string): string {
-  const words = name.split(/\s+/)
-  if (words.length === 1) return name.slice(0, 3).toUpperCase()
-  return words.map(w => w[0]).join('').toUpperCase().slice(0, 3)
-}
-
-function getMeta(bankName: string) {
-  if (BANK_META[bankName]) return BANK_META[bankName]
-  // Case-insensitive lookup
-  const key = Object.keys(BANK_META).find(k => k.toLowerCase() === bankName.toLowerCase())
-  if (key) return BANK_META[key]
-  return { bg: 'bg-gray-500', text: 'text-white', short: autoShort(bankName) }
+function getLogo(bankName: string): string | null {
+  if (BANK_LOGO[bankName]) return BANK_LOGO[bankName]
+  const key = Object.keys(BANK_LOGO).find(k => k.toLowerCase() === bankName.toLowerCase())
+  return key ? BANK_LOGO[key] : null
 }
 
 interface Props {
   bankName: string | null | undefined
-  /** 'chip' = small inline pill, 'icon' = compact circle */
+  /** 'chip' = logo + name pill, 'icon' = logo circle only */
   variant?: 'chip' | 'icon'
   className?: string
 }
 
 export function BankBadge({ bankName, variant = 'chip', className }: Props) {
   if (!bankName) return null
-  const meta = getMeta(bankName)
+  const logo = getLogo(bankName)
 
   if (variant === 'icon') {
-    return (
+    return logo ? (
+      <Image
+        src={logo}
+        alt={bankName}
+        width={24}
+        height={24}
+        className={cn('w-6 h-6 rounded-full object-contain bg-white shrink-0', className)}
+      />
+    ) : (
       <div
         className={cn(
-          'w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 leading-none',
-          meta.bg,
-          meta.text,
+          'w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[9px] font-bold text-gray-500 shrink-0',
           className,
         )}
         title={bankName}
       >
-        {meta.short.slice(0, 2)}
+        {bankName.slice(0, 2).toUpperCase()}
       </div>
     )
   }
@@ -85,14 +81,24 @@ export function BankBadge({ bankName, variant = 'chip', className }: Props) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full',
-        meta.bg,
-        meta.text,
+        'inline-flex items-center gap-1.5 text-xs font-medium pl-1 pr-2 py-0.5 rounded-full bg-gray-100 text-gray-700',
         className,
       )}
     >
-      <span className="font-bold text-[10px] opacity-80">{meta.short}</span>
-      <span className="hidden sm:inline">{bankName}</span>
+      {logo ? (
+        <Image
+          src={logo}
+          alt=""
+          width={16}
+          height={16}
+          className="w-4 h-4 rounded-full object-contain"
+        />
+      ) : (
+        <span className="w-4 h-4 rounded-full bg-gray-300 flex items-center justify-center text-[8px] font-bold text-gray-600">
+          {bankName.slice(0, 2).toUpperCase()}
+        </span>
+      )}
+      {bankName}
     </span>
   )
 }
