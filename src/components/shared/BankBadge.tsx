@@ -1,12 +1,8 @@
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
 
-/**
- * Maps bank names to their logo file in /public/banks/.
- * Logo files are 128×128 PNGs.
- */
+/** Banks with a real PNG favicon in /public/banks/ */
 const BANK_LOGO: Record<string, string> = {
-  // Real favicon PNGs
   'Santander':      '/banks/santander.png',
   'Unicaja':        '/banks/unicaja.png',
   'CR Teruel':      '/banks/cr-teruel.png',
@@ -29,22 +25,32 @@ const BANK_LOGO: Record<string, string> = {
   'Liberbank':      '/banks/liberbank.png',
   'Pibank':         '/banks/pibank.png',
   'Targobank':      '/banks/targobank.png',
-  // Branded SVGs (banks without accessible favicons)
-  'Kutxabank':      '/banks/kutxabank.svg',
-  'EVO Banco':      '/banks/evo-banco.svg',
-  'EuroCajaRural':  '/banks/eurocajarural.svg',
-  'CR Asturias':    '/banks/cr-asturias.svg',
-  'CR del Sur':     '/banks/cr-del-sur.svg',
-  'CR Extremadura': '/banks/cr-extremadura.svg',
-  'Laboral Kutxa':  '/banks/laboral-kutxa.svg',
-  'Caixa Popular':  '/banks/caixa-popular.svg',
-  'WiZink':         '/banks/wizink.svg',
 }
 
-function getLogo(bankName: string): string | null {
-  if (BANK_LOGO[bankName]) return BANK_LOGO[bankName]
-  const key = Object.keys(BANK_LOGO).find(k => k.toLowerCase() === bankName.toLowerCase())
-  return key ? BANK_LOGO[key] : null
+/** Brand color + abbreviation for banks without a downloadable logo */
+const BANK_BRAND: Record<string, { bg: string; short: string }> = {
+  'Kutxabank':      { bg: '#003DA5', short: 'KTX' },
+  'EVO Banco':      { bg: '#00A3E0', short: 'EVO' },
+  'EuroCajaRural':  { bg: '#006633', short: 'ECR' },
+  'CR Asturias':    { bg: '#004B28', short: 'CRA' },
+  'CR del Sur':     { bg: '#1B5E20', short: 'CRS' },
+  'CR Extremadura': { bg: '#2E7D32', short: 'CRE' },
+  'CR Aragón':      { bg: '#388E3C', short: 'CRA' },
+  'Laboral Kutxa':  { bg: '#E65100', short: 'LK' },
+  'Caixa Popular':  { bg: '#0277BD', short: 'CP' },
+  'WiZink':         { bg: '#FF6F00', short: 'WIZ' },
+}
+
+function lookup<T>(map: Record<string, T>, bankName: string): T | null {
+  if (map[bankName]) return map[bankName]
+  const key = Object.keys(map).find(k => k.toLowerCase() === bankName.toLowerCase())
+  return key ? map[key] : null
+}
+
+function autoShort(name: string): string {
+  const words = name.split(/\s+/)
+  if (words.length === 1) return name.slice(0, 3).toUpperCase()
+  return words.map(w => w[0]).join('').toUpperCase().slice(0, 3)
 }
 
 interface Props {
@@ -54,9 +60,27 @@ interface Props {
   className?: string
 }
 
+/** Inline colored circle for banks without a PNG logo */
+function BrandCircle({ bankName, size }: { bankName: string; size: 'sm' | 'md' }) {
+  const brand = lookup(BANK_BRAND, bankName)
+  const bg = brand?.bg ?? '#6B7280'
+  const short = brand?.short ?? autoShort(bankName)
+  const px = size === 'sm' ? 'w-4 h-4 text-[7px]' : 'w-6 h-6 text-[9px]'
+
+  return (
+    <span
+      className={`${px} rounded-full flex items-center justify-center font-bold text-white shrink-0 leading-none`}
+      style={{ backgroundColor: bg }}
+      title={bankName}
+    >
+      {short.slice(0, size === 'sm' ? 2 : 3)}
+    </span>
+  )
+}
+
 export function BankBadge({ bankName, variant = 'chip', className }: Props) {
   if (!bankName) return null
-  const logo = getLogo(bankName)
+  const logo = lookup(BANK_LOGO, bankName)
 
   if (variant === 'icon') {
     return logo ? (
@@ -68,15 +92,7 @@ export function BankBadge({ bankName, variant = 'chip', className }: Props) {
         className={cn('w-6 h-6 rounded-full object-contain bg-white shrink-0', className)}
       />
     ) : (
-      <div
-        className={cn(
-          'w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[9px] font-bold text-gray-500 shrink-0',
-          className,
-        )}
-        title={bankName}
-      >
-        {bankName.slice(0, 2).toUpperCase()}
-      </div>
+      <BrandCircle bankName={bankName} size="md" />
     )
   }
 
@@ -96,9 +112,7 @@ export function BankBadge({ bankName, variant = 'chip', className }: Props) {
           className="w-4 h-4 rounded-full object-contain"
         />
       ) : (
-        <span className="w-4 h-4 rounded-full bg-gray-300 flex items-center justify-center text-[8px] font-bold text-gray-600">
-          {bankName.slice(0, 2).toUpperCase()}
-        </span>
+        <BrandCircle bankName={bankName} size="sm" />
       )}
       {bankName}
     </span>
