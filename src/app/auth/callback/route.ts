@@ -12,7 +12,7 @@ const ALLOWED_DOMAINS = ['huspy.io', 'bayteca.com']
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/tickets'
+  const next = searchParams.get('next') ?? '/home'
 
   if (!code) {
     console.error('[auth/callback] No code in URL')
