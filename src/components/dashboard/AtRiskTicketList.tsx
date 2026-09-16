@@ -11,20 +11,20 @@ function formatTimeStatus(deadline: string, status: 'breaching' | 'at-risk') {
     const overMs = Math.abs(diffMs)
     const overH = Math.floor(overMs / (1000 * 60 * 60))
     const overM = Math.floor((overMs % (1000 * 60 * 60)) / (1000 * 60))
-    if (overH > 0) return `Overdue ${overH}h`
-    return `Overdue ${overM}m`
+    if (overH > 0) return `Vencido ${overH}h`
+    return `Vencido ${overM}m`
   }
   const h = Math.floor(diffMs / (1000 * 60 * 60))
   const m = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
-  if (h > 0) return `Due in ${h}h`
-  return `Due in ${m}m`
+  if (h > 0) return `Vence en ${h}h`
+  return `Vence en ${m}m`
 }
 
 export function AtRiskTicketList({ tickets }: Props) {
   if (tickets.length === 0) {
     return (
       <p className="text-sm text-green-600 font-medium py-1">
-        ✓ No SLA risks right now
+        Sin riesgos de SLA actualmente
       </p>
     )
   }

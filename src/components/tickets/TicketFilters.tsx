@@ -171,7 +171,13 @@ export function TicketFilters({ current, categories }: Props) {
       />
 
       {hasFilters && (
-        <button onClick={clear} className="text-sm text-gray-400 hover:text-gray-700 transition-colors">
+        <button
+          onClick={clear}
+          className="inline-flex items-center gap-1 h-8 px-3 text-xs font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
           Limpiar filtros
         </button>
       )}

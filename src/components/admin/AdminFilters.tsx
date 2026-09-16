@@ -175,7 +175,7 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
         <button
           type="button"
           onClick={toggleStatusDropdown}
-          className="h-8 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white flex items-center gap-1.5 whitespace-nowrap"
+          className="h-8 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#083D20] bg-white flex items-center gap-1.5 whitespace-nowrap"
         >
           {pendingStatuses.length === 0
             ? 'Todos los estados'
@@ -221,7 +221,7 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
           <button
             type="button"
             onClick={toggleCatDropdown}
-            className="h-8 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white flex items-center gap-1.5 whitespace-nowrap"
+            className="h-8 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#083D20] bg-white flex items-center gap-1.5 whitespace-nowrap"
           >
             {pendingCatIds.length === 0
               ? 'Todas las categorías'
@@ -255,14 +255,14 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
         <button
           type="button"
           onClick={() => update('date_field', '')}
-          className={`px-2 text-xs h-full transition-colors ${(!current.date_field || current.date_field === 'created_at') ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+          className={`px-2 text-xs h-full transition-colors ${(!current.date_field || current.date_field === 'created_at') ? 'bg-[#083D20] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
         >
           Creación
         </button>
         <button
           type="button"
           onClick={() => update('date_field', 'updated_at')}
-          className={`px-2 text-xs h-full transition-colors ${current.date_field === 'updated_at' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+          className={`px-2 text-xs h-full transition-colors ${current.date_field === 'updated_at' ? 'bg-[#083D20] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
         >
           Actualización
         </button>
@@ -273,7 +273,7 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
           type="date"
           value={current.from ?? ''}
           onChange={e => update('from', e.target.value)}
-          className="h-8 px-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+          className="h-8 px-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#083D20]"
         />
       </div>
       <div className="flex items-center gap-1">
@@ -282,7 +282,7 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
           type="date"
           value={current.to ?? ''}
           onChange={e => update('to', e.target.value)}
-          className="h-8 px-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+          className="h-8 px-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#083D20]"
         />
       </div>
 
@@ -291,7 +291,7 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
         <select
           value={current.assignee ?? ''}
           onChange={e => update('assignee', e.target.value)}
-          className="h-8 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+          className="h-8 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#083D20]"
         >
           <option value="">Todos los asignados</option>
           {admins.map(a => (
@@ -306,7 +306,7 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
       <select
         value={current.source ?? ''}
         onChange={e => update('source', e.target.value)}
-        className="h-8 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+        className="h-8 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#083D20]"
       >
         <option value="">Todos los tickets</option>
         <option value="system">Solo sistema</option>
@@ -333,7 +333,13 @@ export function AdminFilters({ current, admins, categories = [] }: Props) {
       />
 
       {hasFilters && (
-        <button onClick={clear} className="text-sm text-gray-400 hover:text-gray-700 transition-colors">
+        <button
+          onClick={clear}
+          className="inline-flex items-center gap-1 h-8 px-3 text-xs font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
           Limpiar filtros
         </button>
       )}

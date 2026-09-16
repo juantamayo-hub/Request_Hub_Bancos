@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { PriorityBadge } from '@/components/shared/PriorityBadge'
+import { Avatar } from '@/components/shared/Avatar'
+import { BankBadge } from '@/components/shared/BankBadge'
 import { formatDateShort, isSlaBreaching } from '@/lib/utils'
 import type { TicketWithRelations } from '@/lib/database.types'
 import type { TicketStatus } from '@/lib/database.types'
@@ -31,7 +33,9 @@ export function TicketCard({ ticket: t, isAdmin = false, hasUnread = false }: Pr
     >
       {hasUnread && (
         <span className="absolute top-2 right-2 flex items-center gap-1 text-xs bg-blue-500 text-white rounded-full px-1.5 py-0.5 leading-none">
-          ✉
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
         </span>
       )}
       <div className="flex items-start justify-between gap-4">
@@ -40,8 +44,9 @@ export function TicketCard({ ticket: t, isAdmin = false, hasUnread = false }: Pr
             <span className="font-mono text-xs text-gray-400">{t.display_id}</span>
             <span className="text-xs text-gray-400">·</span>
             <span className="text-xs text-gray-500">{t.categories.name}</span>
+            {t.bank_name && <BankBadge bankName={t.bank_name} variant="chip" />}
             {isSlaBreaching(t.sla_deadline) && (
-              <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-600 font-medium">
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 font-medium">
                 SLA
               </span>
             )}
@@ -73,7 +78,17 @@ export function TicketCard({ ticket: t, isAdmin = false, hasUnread = false }: Pr
         <div className="flex items-center gap-3 min-w-0">
           <span className="shrink-0">Últ. act. {formatDateShort(t.updated_at)}</span>
           {t.assignee && (
-            <span className="truncate">→ {t.assignee.first_name ?? t.assignee.email}</span>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <Avatar
+                name={t.assignee.first_name}
+                email={t.assignee.email}
+                avatarUrl={t.assignee.avatar_url}
+                size="xs"
+              />
+              <span className="truncate text-gray-500">
+                {t.assignee.first_name ?? t.assignee.email}
+              </span>
+            </div>
           )}
         </div>
       </div>

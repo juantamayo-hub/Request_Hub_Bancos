@@ -4,11 +4,11 @@ interface Props {
   velocityLast7Days: VelocityDay[]
 }
 
-const DAY_ABBR = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+const DAY_ABBR = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá']
 
 export function VelocityChart({ velocityLast7Days }: Props) {
   if (velocityLast7Days.length === 0) {
-    return <div className="h-40 flex items-center justify-center text-sm text-gray-400">No data</div>
+    return <div className="h-40 flex items-center justify-center text-sm text-gray-400">Sin datos</div>
   }
 
   const W = 700
@@ -126,13 +126,13 @@ export function VelocityChart({ velocityLast7Days }: Props) {
           <svg width="16" height="2" aria-hidden="true">
             <line x1="0" y1="1" x2="16" y2="1" stroke="#d1d5db" strokeWidth="1.5" />
           </svg>
-          <span className="text-xs text-gray-400">Opened</span>
+          <span className="text-xs text-gray-400">Abiertos</span>
         </div>
         <div className="flex items-center gap-1.5">
           <svg width="16" height="3" aria-hidden="true">
             <line x1="0" y1="1.5" x2="16" y2="1.5" stroke="#22c55e" strokeWidth="2.5" />
           </svg>
-          <span className="text-xs text-gray-400">Closed</span>
+          <span className="text-xs text-gray-400">Cerrados</span>
         </div>
       </div>
     </div>

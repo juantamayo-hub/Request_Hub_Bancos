@@ -1,11 +1,11 @@
 import type { DashboardMetrics } from '@/lib/database.types'
 
 const SEGMENTS = [
-  { key: 'newCount',        label: 'New',        color: 'bg-blue-400' },
-  { key: 'inProgressCount', label: 'In Progress', color: 'bg-yellow-400' },
-  { key: 'waitingCount',    label: 'Waiting',     color: 'bg-orange-400' },
-  { key: 'resolvedCount',   label: 'Resolved',    color: 'bg-green-400' },
-  { key: 'closedCount',     label: 'Closed',      color: 'bg-gray-300' },
+  { key: 'newCount',        label: 'Nuevo',              color: 'bg-blue-400' },
+  { key: 'inProgressCount', label: 'Proceso / Trámite',  color: 'bg-violet-400' },
+  { key: 'waitingCount',    label: 'Esperando banco',    color: 'bg-amber-400' },
+  { key: 'resolvedCount',   label: 'Cancelado',          color: 'bg-rose-400' },
+  { key: 'closedCount',     label: 'Solucionado',        color: 'bg-slate-300' },
 ] as const
 
 type MetricsKey = (typeof SEGMENTS)[number]['key']
