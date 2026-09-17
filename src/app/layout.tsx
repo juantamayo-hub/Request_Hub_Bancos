@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { Toaster } from 'sonner'
+import { PromoBanner } from '@/components/shared/PromoBanner'
 
 export const metadata: Metadata = {
   title: { default: 'Request Hub · Bancos', template: '%s | Request Hub Bancos' },
@@ -17,6 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {children}
         <Toaster position="top-right" richColors closeButton />
+        <PromoBanner />
       </body>
     </html>
   )
