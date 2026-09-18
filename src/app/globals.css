@@ -138,3 +138,159 @@
   stroke-dashoffset: var(--len);
   animation: draw-line 0.6s ease-out both;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * HOME PAGE — Premium animated cards
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Staggered entrance from below with scale ── */
+@keyframes home-hero-in {
+  from { opacity: 0; transform: translateY(30px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── Card rise with subtle bounce ── */
+@keyframes home-card-in {
+  0%   { opacity: 0; transform: translateY(50px) scale(0.9); }
+  60%  { opacity: 1; transform: translateY(-6px) scale(1.02); }
+  80%  { transform: translateY(3px) scale(0.995); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── Rotating gradient border ── */
+@keyframes home-border-rotate {
+  0%   { --home-angle: 0deg; }
+  100% { --home-angle: 360deg; }
+}
+
+/* ── Icon float / breathing ── */
+@keyframes home-icon-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+/* ── Shimmer sweep across card ── */
+@keyframes home-shimmer-sweep {
+  0%   { transform: translateX(-100%) skewX(-15deg); }
+  100% { transform: translateX(200%) skewX(-15deg); }
+}
+
+/* ── Subtle pulse glow on hover ── */
+@keyframes home-glow-pulse {
+  0%, 100% { opacity: 0; }
+  50%      { opacity: 1; }
+}
+
+/* ── Background mesh drift ── */
+@keyframes home-mesh-1 {
+  0%   { transform: translate(0, 0) scale(1); }
+  25%  { transform: translate(60px, -40px) scale(1.08); }
+  50%  { transform: translate(-30px, 30px) scale(0.95); }
+  75%  { transform: translate(40px, 20px) scale(1.05); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+@keyframes home-mesh-2 {
+  0%   { transform: translate(0, 0) scale(1); }
+  33%  { transform: translate(-50px, 50px) scale(1.12); }
+  66%  { transform: translate(40px, -30px) scale(0.9); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+/* ── Footer logos fade ── */
+@keyframes home-footer-in {
+  from { opacity: 0; }
+  to   { opacity: 0.4; }
+}
+
+.home-hero-in {
+  animation: home-hero-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.home-card-in {
+  animation: home-card-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.home-footer-in {
+  animation: home-footer-in 0.6s ease-out both;
+}
+
+/* ── Premium card base ── */
+.home-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 4px 12px rgba(0, 0, 0, 0.03);
+}
+.home-card:hover {
+  transform: translateY(-6px) scale(1.02);
+  border-color: transparent;
+  box-shadow:
+    0 20px 40px rgba(0, 0, 0, 0.08),
+    0 8px 16px rgba(0, 0, 0, 0.04);
+}
+
+/* ── Shimmer overlay on hover ── */
+.home-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.5) 50%,
+    transparent 60%
+  );
+}
+.home-card:hover::after {
+  opacity: 1;
+  animation: home-shimmer-sweep 0.8s ease-out;
+}
+
+/* ── Green accent card ── */
+.home-card-green:hover {
+  border-color: rgba(8, 61, 32, 0.25);
+  box-shadow:
+    0 20px 40px rgba(8, 61, 32, 0.1),
+    0 8px 16px rgba(8, 61, 32, 0.06),
+    0 0 0 1px rgba(8, 61, 32, 0.08);
+}
+
+/* ── Navy accent card ── */
+.home-card-navy:hover {
+  border-color: rgba(31, 54, 87, 0.25);
+  box-shadow:
+    0 20px 40px rgba(31, 54, 87, 0.1),
+    0 8px 16px rgba(31, 54, 87, 0.06),
+    0 0 0 1px rgba(31, 54, 87, 0.08);
+}
+
+/* ── Icon container breathing ── */
+.home-card:hover .home-icon {
+  animation: home-icon-float 2s ease-in-out infinite;
+}
+
+/* ── Glow ring behind icon on hover ── */
+.home-icon-glow {
+  position: absolute;
+  inset: -4px;
+  border-radius: 1rem;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  filter: blur(10px);
+}
+.home-card:hover .home-icon-glow {
+  animation: home-glow-pulse 2s ease-in-out infinite;
+}
+
+/* ── Animated mesh blobs for page background ── */
+.home-mesh-1 { animation: home-mesh-1 20s ease-in-out infinite; }
+.home-mesh-2 { animation: home-mesh-2 25s ease-in-out infinite; }
