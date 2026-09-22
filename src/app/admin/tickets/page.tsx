@@ -37,10 +37,10 @@ export default async function AdminTicketsPage({ searchParams }: Props) {
     .select(`
       id, display_id, subject, status, priority,
       created_at, updated_at, client_name, sla_deadline,
-      assignee_id, created_by,
+      assignee_id, created_by, bank_name,
       categories(id, name),
       profiles!tickets_created_by_fkey(email),
-      assignee:profiles!tickets_assignee_id_fkey(first_name, email)
+      assignee:profiles!tickets_assignee_id_fkey(first_name, email, avatar_url)
     `)
 
   if (sp.statuses) {
