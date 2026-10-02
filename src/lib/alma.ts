@@ -29,7 +29,7 @@ export async function almaVisibleForCurrentUser(): Promise<boolean> {
 }
 
 /** Reenvía una petición del navegador al Command Center con el email del usuario ya validado. */
-export async function forwardToCommandCenter(path: 'chat' | 'report', req: Request): Promise<Response> {
+export async function forwardToCommandCenter(path: 'chat' | 'report' | 'slack' | 'feedback', req: Request): Promise<Response> {
   const user = await getUser().catch(() => null)
   if (!user?.email) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   if (!almaAllowedFor(user.email)) return Response.json({ error: 'Not found' }, { status: 404 })
