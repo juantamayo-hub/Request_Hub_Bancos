@@ -17,6 +17,7 @@ const TOOL_LABELS: Record<string, string> = {
   explicar_envio: 'Revisando el envío, la hoja y Drive…',
   documentos_cliente: 'Mirando su carpeta de Drive…',
   tickets_cliente: 'Consultando Request Hub…',
+  tickets_abiertos: 'Revisando la cola de Request Hub…',
   metricas: 'Calculando cifras…',
   conocimiento: 'Repasando cómo funciona el proceso…',
   marcar_problema_tecnico: 'Preparando el reporte técnico…',
@@ -48,27 +49,31 @@ interface ChatMessage {
   feedback?: { rating: 'up' | 'down'; comment: string; state: 'editing' | 'sending' | 'sent' | 'error'; info?: string }
 }
 
-// ── Formato mínimo y seguro: **negrita**, [texto](url), viñetas y saltos de línea ─────────────
+// ── Formato mínimo y seguro: **negrita**, *cursiva*, [texto](url), viñetas y saltos de línea ─────────────
+// Los asteriscos sueltos o mal cerrados (p. ej. «*texto***») se quitan para que no se vean en pantalla.
+const cleanStars = (t: string) => t.replace(/\*{2,}/g, '').replace(/(^|\s)\*(?=\S)/g, '$1').replace(/(\S)\*(?=\s|$|[.,;:!?)])/g, '$1')
+
 function renderInline(text: string, keyBase: string): ReactNode[] {
   const out: ReactNode[] = []
-  const re = /\*\*([^*]+)\*\*|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s)]+)/g
+  const re = /\*{2,3}([^*]+?)\*{2,3}|(?<![\w*])\*([^*\s][^*]*?)\*(?![\w*])|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s)]+)/g
   let last = 0
   let m: RegExpExecArray | null
   let i = 0
   while ((m = re.exec(text))) {
-    if (m.index > last) out.push(text.slice(last, m.index))
-    if (m[1]) out.push(<strong key={`${keyBase}-b${i++}`}>{m[1]}</strong>)
+    if (m.index > last) out.push(cleanStars(text.slice(last, m.index)))
+    if (m[1]) out.push(<strong key={`${keyBase}-b${i++}`}>{cleanStars(m[1])}</strong>)
+    else if (m[2]) out.push(<em key={`${keyBase}-i${i++}`}>{cleanStars(m[2])}</em>)
     else {
-      const href = m[3] ?? m[4]
+      const href = m[4] ?? m[5]
       out.push(
         <a key={`${keyBase}-a${i++}`} href={href} target="_blank" rel="noopener noreferrer" className="font-medium text-brand-green underline underline-offset-2 hover:opacity-80">
-          {m[2] ?? 'enlace'}
+          {m[3] ? cleanStars(m[3]) : 'enlace'}
         </a>,
       )
     }
     last = m.index + m[0].length
   }
-  if (last < text.length) out.push(text.slice(last))
+  if (last < text.length) out.push(cleanStars(text.slice(last)))
   return out
 }
 
