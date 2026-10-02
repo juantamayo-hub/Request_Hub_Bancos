@@ -4,6 +4,8 @@
  *  - ALMA_ALLOWED_EMAILS=a@x,b@y   → si está definido, solo esos emails (staging)
  *  - ALMA_CC_URL                   → URL del Command Center (p. ej. el dominio de staging)
  *  - ALMA_SHARED_SECRET            → mismo valor que en el Command Center
+ *  - ALMA_CC_PROTECTION_BYPASS     → (opcional) "Protection Bypass for Automation" de Vercel del Command Center,
+ *                                    necesario si las vistas previas (staging) tienen Deployment Protection
  */
 
 import { getUser } from '@/lib/auth'
@@ -38,7 +40,12 @@ export async function forwardToCommandCenter(path: 'chat' | 'report', req: Reque
 
   const upstream = await fetch(`${base.replace(/\/$/, '')}/api/alma/${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-alma-secret': secret, 'x-alma-user-email': user.email },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-alma-secret': secret,
+      'x-alma-user-email': user.email,
+      ...(process.env.ALMA_CC_PROTECTION_BYPASS ? { 'x-vercel-protection-bypass': process.env.ALMA_CC_PROTECTION_BYPASS } : {}),
+    },
     body: await req.text(),
     cache: 'no-store',
   })
