@@ -29,7 +29,7 @@ export async function almaVisibleForCurrentUser(): Promise<boolean> {
 }
 
 /** Reenvía una petición del navegador al Command Center con el email del usuario ya validado. */
-export async function forwardToCommandCenter(path: 'chat' | 'report' | 'slack' | 'feedback', req: Request): Promise<Response> {
+export async function forwardToCommandCenter(path: 'chat' | 'report' | 'slack' | 'feedback' | 'tutorial', req: Request): Promise<Response> {
   const user = await getUser().catch(() => null)
   if (!user?.email) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   if (!almaAllowedFor(user.email)) return Response.json({ error: 'Not found' }, { status: 404 })
@@ -39,14 +39,14 @@ export async function forwardToCommandCenter(path: 'chat' | 'report' | 'slack' |
   if (!base || !secret) return Response.json({ error: 'Alma no está configurada' }, { status: 503 })
 
   const upstream = await fetch(`${base.replace(/\/$/, '')}/api/alma/${path}`, {
-    method: 'POST',
+    method: req.method === 'GET' ? 'GET' : 'POST',
     headers: {
       'Content-Type': 'application/json',
       'x-alma-secret': secret,
       'x-alma-user-email': user.email,
       ...(process.env.ALMA_CC_PROTECTION_BYPASS ? { 'x-vercel-protection-bypass': process.env.ALMA_CC_PROTECTION_BYPASS } : {}),
     },
-    body: await req.text(),
+    body: req.method === 'GET' ? undefined : await req.text(),
     cache: 'no-store',
   })
   return new Response(upstream.body, {
