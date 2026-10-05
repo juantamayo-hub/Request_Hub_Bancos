@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import AlmaChat from './AlmaChat'
+import AlmaBoundary from './AlmaBoundary'
 
 const HIDDEN_ON = ['/login', '/auth', '/unauthorized']
 
@@ -9,5 +10,9 @@ const HIDDEN_ON = ['/login', '/auth', '/unauthorized']
 export function AlmaWidget({ envLabel }: { envLabel?: string }) {
   const pathname = usePathname() ?? ''
   if (HIDDEN_ON.some((p) => pathname.startsWith(p))) return null
-  return <AlmaChat apiBase="/api/alma" envLabel={envLabel} />
+  return (
+    <AlmaBoundary>
+      <AlmaChat apiBase="/api/alma" envLabel={envLabel} />
+    </AlmaBoundary>
+  )
 }

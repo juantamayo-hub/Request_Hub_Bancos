@@ -8,7 +8,7 @@
  *                                    necesario si las vistas previas (staging) tienen Deployment Protection
  */
 
-import { getUser } from '@/lib/auth'
+import { getProfile, getUser } from '@/lib/auth'
 
 const ALLOWED_DOMAINS = ['huspy.io', 'bayteca.com']
 
@@ -22,7 +22,9 @@ export function almaAllowedFor(email: string | null | undefined): boolean {
 export async function almaVisibleForCurrentUser(): Promise<boolean> {
   try {
     const user = await getUser()
-    return almaAllowedFor(user?.email)
+    if (!almaAllowedFor(user?.email)) return false
+    const profile = await getProfile()
+    return profile?.role === 'admin' // Alma solo para administradores (el Command Center lo vuelve a comprobar)
   } catch {
     return false
   }
@@ -33,6 +35,8 @@ export async function forwardToCommandCenter(path: 'chat' | 'report' | 'slack' |
   const user = await getUser().catch(() => null)
   if (!user?.email) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   if (!almaAllowedFor(user.email)) return Response.json({ error: 'Not found' }, { status: 404 })
+  const profile = await getProfile().catch(() => null)
+  if (profile?.role !== 'admin') return Response.json({ error: 'Alma solo está disponible para administradores.' }, { status: 403 })
 
   const base = process.env.ALMA_CC_URL
   const secret = process.env.ALMA_SHARED_SECRET
