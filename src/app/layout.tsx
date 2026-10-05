@@ -23,7 +23,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {children}
         <Toaster position="top-right" richColors closeButton />
         <PromoBanner />
-        {showAlma && <AlmaWidget envLabel={process.env.ALMA_ENV === 'production' ? undefined : 'staging'} />}
+        {showAlma && <AlmaWidget envLabel={(process.env.ALMA_ENV || (process.env.VERCEL_ENV === 'production' ? 'production' : 'staging')) === 'production' ? undefined : 'staging'} />}
       </body>
     </html>
   )
