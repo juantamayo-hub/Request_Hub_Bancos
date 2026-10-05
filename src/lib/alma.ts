@@ -13,7 +13,7 @@ import { getUser } from '@/lib/auth'
 const ALLOWED_DOMAINS = ['huspy.io', 'bayteca.com']
 
 export function almaAllowedFor(email: string | null | undefined): boolean {
-  if (process.env.ALMA_ENABLED !== 'true' || !email) return false
+  if ((process.env.ALMA_ENABLED || '').trim().toLowerCase() !== 'true' || !email) return false
   if (!ALLOWED_DOMAINS.includes(email.split('@')[1]?.toLowerCase() ?? '')) return false
   const list = (process.env.ALMA_ALLOWED_EMAILS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
   return list.length === 0 || list.includes(email.toLowerCase())
