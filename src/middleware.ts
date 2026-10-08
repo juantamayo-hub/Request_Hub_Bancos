@@ -5,7 +5,7 @@ import { safeRedirectPath } from '@/lib/safe-redirect'
 const ALLOWED_DOMAINS = ['huspy.io', 'bayteca.com']
 
 // Paths that don't require authentication
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/unauthorized', '/api/slack/', '/api/cron/', '/api/external/', '/api/pipedrive/oauth/']
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/unauthorized', '/api/slack/', '/api/cron/', '/api/external/', '/api/pipedrive/oauth/', '/api/pipedrive/panel']
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request })
@@ -38,8 +38,8 @@ export async function middleware(request: NextRequest) {
   // Not authenticated → redirect to login (except public paths)
   if (!user && !isPublic) {
     const loginUrl = new URL('/login', request.nextUrl.origin)
-    // Remember where the user was going (e.g. /tickets/new?selectedIds=123 from Pipedrive)
-    if (pathname.startsWith('/tickets/new')) {
+    // Remember where the user was going (e.g. /tickets/new?selectedIds=123 or a ticket link from Pipedrive)
+    if (pathname.startsWith('/tickets/')) {
       loginUrl.searchParams.set('next', pathname + request.nextUrl.search)
     }
     return NextResponse.redirect(loginUrl)
