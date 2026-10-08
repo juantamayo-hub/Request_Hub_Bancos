@@ -1,10 +1,11 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { safeRedirectPath } from '@/lib/safe-redirect'
 
 const ALLOWED_DOMAINS = ['huspy.io', 'bayteca.com']
 
 // Paths that don't require authentication
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/unauthorized', '/api/slack/', '/api/cron/', '/api/external/']
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/unauthorized', '/api/slack/', '/api/cron/', '/api/external/', '/api/pipedrive/oauth/']
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request })
@@ -36,7 +37,12 @@ export async function middleware(request: NextRequest) {
 
   // Not authenticated → redirect to login (except public paths)
   if (!user && !isPublic) {
-    return NextResponse.redirect(new URL('/login', request.nextUrl.origin))
+    const loginUrl = new URL('/login', request.nextUrl.origin)
+    // Remember where the user was going (e.g. /tickets/new?selectedIds=123 from Pipedrive)
+    if (pathname.startsWith('/tickets/new')) {
+      loginUrl.searchParams.set('next', pathname + request.nextUrl.search)
+    }
+    return NextResponse.redirect(loginUrl)
   }
 
   if (user) {
@@ -50,11 +56,10 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    // Authenticated users visiting /login → redirect to /home
+    // Authenticated users visiting /login → redirect to `next` (default /home)
     if (pathname === '/login') {
-      const url = request.nextUrl.clone()
-      url.pathname = '/home'
-      return NextResponse.redirect(url)
+      const next = safeRedirectPath(request.nextUrl.searchParams.get('next'))
+      return NextResponse.redirect(new URL(next, request.nextUrl.origin))
     }
   }
 

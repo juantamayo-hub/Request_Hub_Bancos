@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { safeRedirectPath } from '@/lib/safe-redirect'
 
 const GOOGLE_ICON = (
   <svg width="20" height="20" viewBox="0 0 48 48">
@@ -50,7 +51,9 @@ export default function LoginForm() {
       const supabase = createClient()
       await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeRedirectPath(params.get('next')))}`,
+        },
       })
     } catch {
       setError('Error al iniciar sesión. Inténtalo de nuevo.')

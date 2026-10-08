@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -27,6 +27,8 @@ const ESTADO_VIVIENDA_OPTIONS = [
 
 interface Props {
   categories: Pick<Category, 'id' | 'name'>[]
+  /** Pre-filled deal (e.g. when opened from the Pipedrive "Abrir ticket bancario" action) */
+  initialDealId?: string
 }
 
 interface DealInfo {
@@ -43,13 +45,13 @@ interface OpenTicket {
   categories: { name: string } | null
 }
 
-export function TicketForm({ categories }: Props) {
+export function TicketForm({ categories, initialDealId }: Props) {
   const router  = useRouter()
   const [loading, setLoading] = useState(false)
 
   const [categoryId,    setCategoryId]    = useState('')
   const [subcategory,   setSubcategory]   = useState('')
-  const [dealId,        setDealId]        = useState('')
+  const [dealId,        setDealId]        = useState(initialDealId ?? '')
   const [dealInfo,      setDealInfo]      = useState<DealInfo | null>(null)
   const [dealLoading,   setDealLoading]   = useState(false)
   const [dealError,     setDealError]     = useState<string | null>(null)
@@ -130,6 +132,12 @@ export function TicketForm({ categories }: Props) {
       setDealLoading(false)
     }
   }
+
+  // Validate the pre-filled deal once on mount (same flow as typing it)
+  useEffect(() => {
+    if (initialDealId) lookupDeal(initialDealId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleDealChange = (val: string) => {
     setDealId(val)
