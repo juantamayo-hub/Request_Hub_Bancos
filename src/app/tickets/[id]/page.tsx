@@ -8,6 +8,7 @@ import { PriorityBadge } from '@/components/shared/PriorityBadge'
 import { CommentThread } from '@/components/tickets/CommentThread'
 import { AddCommentForm } from '@/components/tickets/AddCommentForm'
 import { CancelTicketButton } from '@/components/tickets/CancelTicketButton'
+import { DealSummaryCard } from '@/components/tickets/DealSummaryCard'
 import { formatDate, displayName, isSlaBreaching } from '@/lib/utils'
 import type { TicketWithRelations, TicketCommentWithAuthor } from '@/lib/database.types'
 
@@ -122,6 +123,14 @@ export default async function TicketDetailPage({ params }: Props) {
               )}
             </div>
           </div>
+
+          {/* AI summary of the Pipedrive deal */}
+          {(t as typeof t & { pipedrive_deal_id?: number | null }).pipedrive_deal_id && (
+            <DealSummaryCard
+              ticketId={id}
+              dealId={(t as typeof t & { pipedrive_deal_id?: number | null }).pipedrive_deal_id!}
+            />
+          )}
 
           {/* Details card */}
           <div className="card p-6 mb-6">
