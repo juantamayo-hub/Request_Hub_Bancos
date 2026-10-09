@@ -10,6 +10,7 @@ import { CommentThread } from '@/components/tickets/CommentThread'
 import { AddCommentForm } from '@/components/tickets/AddCommentForm'
 import { SnoozeButton } from '@/components/tickets/SnoozeButton'
 import { AdminTicketActions } from '@/components/admin/AdminTicketActions'
+import { DealSummaryCard } from '@/components/tickets/DealSummaryCard'
 import { formatDate, displayName, isSlaBreaching } from '@/lib/utils'
 import type { TicketWithRelations, TicketCommentWithAuthor, AuditLogWithActor, Profile } from '@/lib/database.types'
 
@@ -129,6 +130,14 @@ export default async function AdminTicketDetailPage({ params }: Props) {
                 )}
               </div>
             </div>
+
+            {/* AI summary of the Pipedrive deal */}
+            {(t as typeof t & { pipedrive_deal_id?: number | null }).pipedrive_deal_id && (
+              <DealSummaryCard
+                ticketId={id}
+                dealId={(t as typeof t & { pipedrive_deal_id?: number | null }).pipedrive_deal_id!}
+              />
+            )}
 
             {/* Ticket details */}
             <div className="card p-6 mb-6">
