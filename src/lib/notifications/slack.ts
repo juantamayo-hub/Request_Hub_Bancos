@@ -25,11 +25,16 @@ const SLACK_FALLBACK_USER_IDS: Record<string, string> = {
  * Set SLACK_BOT_TOKEN=xoxb-... in your environment variables.
  */
 export async function postSlackDM(email: string, message: SlackMessage): Promise<boolean> {
+  return (await postSlackDMWithResult(email, message)).ok
+}
+
+/** Igual que postSlackDM pero devuelve el motivo del fallo (no_token, users_not_found, invalid_blocks…). */
+export async function postSlackDMWithResult(email: string, message: SlackMessage): Promise<{ ok: boolean; error?: string }> {
   const botToken = process.env.SLACK_BOT_TOKEN
 
   if (!botToken) {
     console.log(`[Slack DM stub] To: ${email} | ${message.text}`)
-    return false
+    return { ok: false, error: 'no_token' }
   }
 
   try {
@@ -49,7 +54,7 @@ export async function postSlackDM(email: string, message: SlackMessage): Promise
         slackUserId = fallbackId
       } else {
         console.warn(`[Slack DM] Could not find user for ${email}: ${lookup.error ?? 'not_found'}`)
-        return false
+        return { ok: false, error: `lookup:${lookup.error ?? 'not_found'}` }
       }
     }
 
@@ -69,10 +74,10 @@ export async function postSlackDM(email: string, message: SlackMessage): Promise
     const send = await sendRes.json() as { ok: boolean; error?: string }
 
     if (!send.ok) console.error(`[Slack DM] Failed to send to ${email}: ${send.error}`)
-    return send.ok
+    return send.ok ? { ok: true } : { ok: false, error: `post:${send.error ?? 'unknown'}` }
   } catch (err) {
     console.error('[Slack DM] Error:', err)
-    return false
+    return { ok: false, error: `exception:${err instanceof Error ? err.message : String(err)}`.slice(0, 200) }
   }
 }
 
@@ -449,7 +454,7 @@ export function buildAssignmentIssueMessage(p: {
   if (p.dealId) {
     elements.push({ type: 'button', text: { type: 'plain_text', text: 'Abrir deal' }, url: `https://mdsl.pipedrive.com/deal/${p.dealId}` })
   }
-  if (p.ccUrl) {
+  if (p.ccUrl && /^https?:\/\/[^\s]+$/.test(p.ccUrl)) {
     elements.push({ type: 'button', text: { type: 'plain_text', text: 'Ver asignaciones' }, url: p.ccUrl })
   }
 
