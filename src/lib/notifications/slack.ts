@@ -13,6 +13,7 @@ export interface SlackMessage {
 /** Fallback Slack user IDs for emails that can't be resolved by email lookup. */
 const SLACK_FALLBACK_USER_IDS: Record<string, string> = {
   'silvia.amigo@bayteca.com': 'U03KR9ULVLH',
+  'juan.tamayo@huspy.io':     'U0A6ZSLGC1Y',
 }
 
 /**
