@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from 'next/server'
+import { NextResponse, after, type NextRequest } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -235,39 +235,49 @@ export async function POST(request: NextRequest) {
     const ccSecret = process.env.COMMAND_CENTER_API_SECRET
     if (!ccUrl || !ccSecret) return errors('Command Center no configurado (COMMAND_CENTER_URL / COMMAND_CENTER_API_SECRET)')
 
-    const addedBy = (await getUserEmail(payload.user.id)) ?? `slack:${payload.user.id}`
-    let result: { resolved?: number; assigned?: number; error?: string } = {}
-    try {
-      const res = await fetch(`${ccUrl}/api/santander/agents`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', 'x-offers-secret': ccSecret },
-        body:    JSON.stringify({ name: meta.agentName, email, added_by: addedBy }),
-      })
-      result = await res.json()
-      if (!res.ok) return errors(result.error ?? `Error ${res.status} del Command Center`)
-    } catch (e) {
-      console.error('add_bank_agent → Command Center error:', e)
-      return errors('No se pudo contactar con el Command Center')
-    }
+    // Slack solo espera 3 s la respuesta del modal: se cierra ya y el resultado (o el error con su causa)
+    // se escribe en el mismo DM cuando el Command Center termina.
+    const updateDm = (text: string) => meta.response_url
+      ? fetch(meta.response_url, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            replace_original: true,
+            text,
+            blocks: [{ type: 'section', text: { type: 'mrkdwn', text } }],
+          }),
+        }).then(() => undefined).catch(console.error)
+      : Promise.resolve()
 
-    if (meta.response_url) {
-      const n = result.assigned ?? 0
-      fetch(meta.response_url, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          replace_original: true,
-          text: `✅ ${meta.agentName} → ${email}`,
-          blocks: [{
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `:white_check_mark: *Gestor añadido:* ${meta.agentName} → ${email}\n${n} ${n === 1 ? 'asignación completada' : 'asignaciones completadas'} en Pipedrive.`,
-            },
-          }],
-        }),
-      }).catch(console.error)
-    }
+    after(async () => {
+      const addedBy = (await getUserEmail(payload.user.id)) ?? `slack:${payload.user.id}`
+      await updateDm(`:hourglass_flowing_sand: Guardando *${meta.agentName}* → ${email} y completando sus asignaciones…`)
+      try {
+        const res = await fetch(`${ccUrl}/api/santander/agents`, {
+          method:   'POST',
+          headers:  { 'Content-Type': 'application/json', 'x-offers-secret': ccSecret },
+          body:     JSON.stringify({ name: meta.agentName, email, added_by: addedBy }),
+          redirect: 'manual',
+        })
+        const raw = await res.text()
+        let result: { assigned?: number; error?: string } = {}
+        try { result = JSON.parse(raw) } catch { /* no es JSON */ }
+        if (!res.ok || result.error) {
+          const why = result.error
+            ?? (res.status >= 300 && res.status < 400
+              ? `redirección ${res.status} (¿COMMAND_CENTER_URL apunta a un entorno protegido?)`
+              : `respuesta ${res.status} no válida`)
+          console.error('add_bank_agent → Command Center:', res.status, raw.slice(0, 300))
+          await updateDm(`:warning: No se pudo añadir *${meta.agentName}* → ${email}: ${why}. Inténtalo de nuevo o añádelo en Command Center → Configuración → Santander → Asignaciones.`)
+          return
+        }
+        const n = result.assigned ?? 0
+        await updateDm(`:white_check_mark: *Gestor añadido:* ${meta.agentName} → ${email}\n${n} ${n === 1 ? 'asignación completada' : 'asignaciones completadas'} en Pipedrive.`)
+      } catch (e) {
+        console.error('add_bank_agent → Command Center error:', e)
+        await updateDm(`:warning: No se pudo contactar con el Command Center (${String(e instanceof Error ? e.message : e).slice(0, 120)}).`)
+      }
+    })
 
     return new NextResponse(JSON.stringify({ response_action: 'clear' }), {
       status:  200,
