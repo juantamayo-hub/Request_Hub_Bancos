@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { postSlackDM, buildAssignmentIssueMessage } from '@/lib/notifications/slack'
+import { postSlackDMWithResult, buildAssignmentIssueMessage } from '@/lib/notifications/slack'
 
 function checkAuth(request: NextRequest): boolean {
   const auth   = request.headers.get('authorization') ?? ''
@@ -83,6 +83,9 @@ export async function POST(request: NextRequest) {
     ccUrl:      ccBase ? `${ccBase}/dashboard/configuracion/${encodeURIComponent(bank.toLowerCase())}?tab=asignaciones` : null,
   })
 
-  const sent = await Promise.all(recipients.map((email) => postSlackDM(email, message)))
-  return NextResponse.json({ notified: recipients.filter((_, i) => sent[i]), failed: recipients.filter((_, i) => !sent[i]) })
+  const sent = await Promise.all(recipients.map((email) => postSlackDMWithResult(email, message)))
+  return NextResponse.json({
+    notified: recipients.filter((_, i) => sent[i].ok),
+    failed:   recipients.filter((_, i) => !sent[i].ok).map((e) => `${e} [${sent[recipients.indexOf(e)].error}]`),
+  })
 }
