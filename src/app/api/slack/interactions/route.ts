@@ -28,6 +28,9 @@ interface SlackViewSubmissionPayload {
         comment_block?: {
           comment_input?: { value: string | null }
         }
+        agent_email_block?: {
+          agent_email_input?: { value: string | null }
+        }
       }
     }
   }
@@ -98,6 +101,8 @@ async function getUserEmail(slackUserId: string): Promise<string | null> {
  * Handles Slack interactive component payloads:
  *  1. block_actions  — user clicked 👍/👎 button → open feedback modal
  *  2. view_submission — user submitted the feedback modal → store result
+ *  3. block_actions 'add_bank_agent' → modal for a bank gestor's email; on submit → Command Center
+ *     POST /api/santander/agents (env COMMAND_CENTER_URL + COMMAND_CENTER_API_SECRET)
  *
  * Required env vars:
  *   SLACK_BOT_TOKEN       xoxb-...
@@ -129,6 +134,41 @@ export async function POST(request: NextRequest) {
   // ── Button click: open feedback modal ──────────────────────
   if (payload.type === 'block_actions') {
     const action = payload.actions?.[0]
+
+    // ── Gestor de banco sin correo: abrir modal para añadirlo (Command Center → Santander gestores) ──
+    if (action?.action_id === 'add_bank_agent') {
+      let info: { bank?: string; agentName?: string; dealId?: number | null } = {}
+      try { info = JSON.parse(action.value) } catch { /* valor inválido: modal sin datos */ }
+      await slackApi('views.open', {
+        trigger_id: payload.trigger_id,
+        view: {
+          type:             'modal',
+          callback_id:      'add_bank_agent_modal',
+          private_metadata: JSON.stringify({ ...info, response_url: payload.response_url }).slice(0, 2900),
+          title:  { type: 'plain_text', text: 'Correo del gestor' },
+          submit: { type: 'plain_text', text: 'Guardar y asignar' },
+          close:  { type: 'plain_text', text: 'Cancelar' },
+          blocks: [
+            {
+              type: 'section',
+              text: { type: 'mrkdwn', text: `*${info.agentName ?? 'Gestor'}* (${info.bank ?? 'banco'})\nSe guardará en la lista de gestores y se completarán sus asignaciones pendientes en Pipedrive.` },
+            },
+            {
+              type:     'input',
+              block_id: 'agent_email_block',
+              label:    { type: 'plain_text', text: 'Correo' },
+              element: {
+                type:        'email_text_input',
+                action_id:   'agent_email_input',
+                placeholder: { type: 'plain_text', text: 'nombre@gruposantander.es' },
+              },
+            },
+          ],
+        },
+      })
+      return new NextResponse('', { status: 200 })
+    }
+
     if (!action || !['feedback_satisfied', 'feedback_unsatisfied'].includes(action.action_id)) {
       return new NextResponse('', { status: 200 })
     }
@@ -177,6 +217,62 @@ export async function POST(request: NextRequest) {
     })
 
     return new NextResponse('', { status: 200 })
+  }
+
+  // ── Modal submission: correo de un gestor de banco → Command Center ──
+  if (payload.type === 'view_submission' && payload.view.callback_id === 'add_bank_agent_modal') {
+    let meta: { bank?: string; agentName?: string; dealId?: number | null; response_url?: string } = {}
+    try { meta = JSON.parse(payload.view.private_metadata) } catch { /* sin metadatos */ }
+    const email = (payload.view.state.values?.agent_email_block?.agent_email_input?.value ?? '').trim().toLowerCase()
+    const errors = (msg: string) => new NextResponse(
+      JSON.stringify({ response_action: 'errors', errors: { agent_email_block: msg } }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    )
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return errors('Correo no válido')
+    if (!meta.agentName) return errors('Falta el nombre del gestor')
+
+    const ccUrl    = process.env.COMMAND_CENTER_URL?.replace(/\/$/, '')
+    const ccSecret = process.env.COMMAND_CENTER_API_SECRET
+    if (!ccUrl || !ccSecret) return errors('Command Center no configurado (COMMAND_CENTER_URL / COMMAND_CENTER_API_SECRET)')
+
+    const addedBy = (await getUserEmail(payload.user.id)) ?? `slack:${payload.user.id}`
+    let result: { resolved?: number; assigned?: number; error?: string } = {}
+    try {
+      const res = await fetch(`${ccUrl}/api/santander/agents`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'x-offers-secret': ccSecret },
+        body:    JSON.stringify({ name: meta.agentName, email, added_by: addedBy }),
+      })
+      result = await res.json()
+      if (!res.ok) return errors(result.error ?? `Error ${res.status} del Command Center`)
+    } catch (e) {
+      console.error('add_bank_agent → Command Center error:', e)
+      return errors('No se pudo contactar con el Command Center')
+    }
+
+    if (meta.response_url) {
+      const n = result.assigned ?? 0
+      fetch(meta.response_url, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          replace_original: true,
+          text: `✅ ${meta.agentName} → ${email}`,
+          blocks: [{
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `:white_check_mark: *Gestor añadido:* ${meta.agentName} → ${email}\n${n} ${n === 1 ? 'asignación completada' : 'asignaciones completadas'} en Pipedrive.`,
+            },
+          }],
+        }),
+      }).catch(console.error)
+    }
+
+    return new NextResponse(JSON.stringify({ response_action: 'clear' }), {
+      status:  200,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   // ── Modal submission: store feedback ──────────────────────
