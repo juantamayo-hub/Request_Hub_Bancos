@@ -408,3 +408,57 @@ export function buildTicketCancelledMessage(p: {
     ],
   }
 }
+
+/**
+ * DM sent when the bank assigns a gestor we can't apply automatically (Command Center → Santander gestores):
+ *  - agent_missing:  the gestor is not in the Command Center list → button "Añadir correo del gestor" opens a modal
+ *                    (handled in /api/slack/interactions, action_id 'add_bank_agent').
+ *  - deal_not_found: no single bank deal (pipeline 7) for that DNI → manual review.
+ */
+export function buildAssignmentIssueMessage(p: {
+  type:        'agent_missing' | 'deal_not_found'
+  bank:        string
+  clientName:  string | null
+  dni:         string
+  agentName:   string
+  dealId:      number | null
+  detail:      string
+  ccUrl:       string | null
+}): SlackMessage {
+  const bankLabel = p.bank.charAt(0).toUpperCase() + p.bank.slice(1)
+  const client = `${p.clientName ?? 'Cliente'} (DNI ${p.dni})`
+  const dealLink = p.dealId ? `<https://mdsl.pipedrive.com/deal/${p.dealId}|Deal ${p.dealId}>` : 'sin deal'
+  const title = p.type === 'agent_missing'
+    ? `:bust_in_silhouette: *${bankLabel} ha asignado un gestor que no está en la lista*`
+    : `:mag: *${bankLabel}: no encuentro el deal bancario para asignar el gestor*`
+  const body = p.type === 'agent_missing'
+    ? `${client} · ${dealLink}\nGestor/a: *${p.agentName}*\n\nAñade su correo y se completa la asignación en Pipedrive (y en todos los clientes que esperan a este gestor).`
+    : `${client}\nGestor/a: *${p.agentName}*\n${p.detail}\n\nRevisa el caso y asígnalo a mano.`
+
+  const elements: Record<string, unknown>[] = []
+  if (p.type === 'agent_missing') {
+    elements.push({
+      type:      'button',
+      style:     'primary',
+      text:      { type: 'plain_text', text: 'Añadir correo del gestor' },
+      action_id: 'add_bank_agent',
+      value:     JSON.stringify({ bank: p.bank, agentName: p.agentName, dealId: p.dealId }).slice(0, 1900),
+    })
+  }
+  if (p.dealId) {
+    elements.push({ type: 'button', text: { type: 'plain_text', text: 'Abrir deal' }, url: `https://mdsl.pipedrive.com/deal/${p.dealId}` })
+  }
+  if (p.ccUrl) {
+    elements.push({ type: 'button', text: { type: 'plain_text', text: 'Ver asignaciones' }, url: p.ccUrl })
+  }
+
+  return {
+    text: p.type === 'agent_missing'
+      ? `${bankLabel}: gestor «${p.agentName}» sin correo para ${client}`
+      : `${bankLabel}: sin deal bancario para ${client}`,
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text: `${title}\n${body}` } },
+      ...(elements.length ? [{ type: 'actions', elements }] : []),
+    ],
+  }
+}

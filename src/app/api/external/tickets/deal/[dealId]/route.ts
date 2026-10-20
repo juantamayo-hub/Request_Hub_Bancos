@@ -11,6 +11,8 @@ function checkAuth(request: NextRequest): boolean {
 /**
  * GET /api/external/tickets/deal/[dealId]
  * Returns open tickets (new | in_progress | waiting_on_employee) for a Pipedrive deal.
+ * With ?include_closed=1 it returns tickets in ANY status (most recent first) — used by the Command Center to
+ * comment the Santander gestor assignment on the deal's ticket even when it is already closed.
  * Protected by Authorization: Bearer EXTERNAL_API_SECRET
  */
 export async function GET(
@@ -27,14 +29,16 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid deal ID' }, { status: 400 })
   }
 
+  const includeClosed = request.nextUrl.searchParams.get('include_closed') === '1'
+
   const admin = createAdminClient()
 
-  const { data: tickets, error } = await admin
+  let query = admin
     .from('tickets')
     .select('id, display_id, subject, status, bank_name, category_id, created_at')
     .eq('pipedrive_deal_id', parsed)
-    .in('status', ['new', 'in_progress', 'waiting_on_employee'])
-    .order('created_at', { ascending: false })
+  if (!includeClosed) query = query.in('status', ['new', 'in_progress', 'waiting_on_employee'])
+  const { data: tickets, error } = await query.order('created_at', { ascending: false })
 
   if (error) {
     console.error('External tickets/deal fetch error:', error)
