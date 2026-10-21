@@ -24,14 +24,30 @@ export default async function MyTicketsPage({ searchParams }: Props) {
   const profile = await requireProfile()
   const supabase = await createClient()
 
+  // "Mis Solicitudes" = tickets I created OR follow — for every role.
+  // Admins see all tickets via RLS, so the scope must be explicit here;
+  // the full list lives in "Todos los tickets" (/admin/tickets).
+  const { data: followed } = await supabase
+    .from('ticket_followers')
+    .select('ticket_id')
+    .eq('user_id', profile.id)
+  const followedIds = (followed ?? []).map(f => f.ticket_id as string)
+
+  // Explicit columns: only what TicketCard renders (skips large fields like description).
   let query = supabase
     .from('tickets')
     .select(`
-      *,
+      id, display_id, subject, status, priority,
+      created_at, updated_at, client_name, sla_deadline,
+      assignee_id, created_by, bank_name,
       categories(id, name),
       profiles!tickets_created_by_fkey(id, email, first_name, last_name, avatar_url),
       assignee:profiles!tickets_assignee_id_fkey(id, email, first_name, last_name, avatar_url)
     `)
+
+  query = followedIds.length > 0
+    ? query.or(`created_by.eq.${profile.id},id.in.(${followedIds.join(',')})`)
+    : query.eq('created_by', profile.id)
 
   if (sp.category_ids) {
     const ids = sp.category_ids.split(',').filter(Boolean)
@@ -74,7 +90,7 @@ export default async function MyTicketsPage({ searchParams }: Props) {
           categories={categories ?? []}
         />
 
-        <TicketList tickets={(tickets ?? []) as TicketWithRelations[]} unreadTicketIds={unreadTicketIds} />
+        <TicketList tickets={(tickets ?? []) as unknown as TicketWithRelations[]} unreadTicketIds={unreadTicketIds} />
       </main>
     </div>
   )

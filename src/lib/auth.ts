@@ -1,13 +1,18 @@
+import { cache } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import type { Profile } from '@/lib/database.types'
 
-/** Returns the Supabase Auth user, or null if not signed in. */
-export async function getUser() {
+/**
+ * Returns the Supabase Auth user, or null if not signed in.
+ * Wrapped in React `cache` so layout + page + helpers share a single
+ * Auth round-trip per server request (no cross-request caching).
+ */
+export const getUser = cache(async () => {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   return user ?? null
-}
+})
 
 /** Redirects to /login if not authenticated. */
 export async function requireUser() {
@@ -16,15 +21,18 @@ export async function requireUser() {
   return user
 }
 
-/** Returns the profiles row for the current user, or null. */
-export async function getProfile(): Promise<Profile | null> {
-  const supabase = await createClient()
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-
-  if (userError || !user) {
-    console.warn('[getProfile] No auth user:', userError?.message)
+/**
+ * Returns the profiles row for the current user, or null.
+ * Memoized per server request (see `getUser`).
+ */
+export const getProfile = cache(async (): Promise<Profile | null> => {
+  const user = await getUser()
+  if (!user) {
+    console.warn('[getProfile] No auth user')
     return null
   }
+
+  const supabase = await createClient()
 
   const { data, error: profileError } = await supabase
     .from('profiles')
@@ -37,7 +45,7 @@ export async function getProfile(): Promise<Profile | null> {
   }
 
   return data ?? null
-}
+})
 
 /** Redirects to /login if not authenticated; returns Profile. */
 export async function requireProfile(): Promise<Profile> {
