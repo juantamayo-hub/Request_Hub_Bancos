@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#16804A"/>
+      <stop offset="1" stop-color="#062E18"/>
+    </linearGradient>
+    <mask id="notch" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <rect width="64" height="64" fill="#fff"/>
+      <circle cx="7" cy="34" r="5.5" fill="#000"/>
+      <circle cx="57" cy="34" r="5.5" fill="#000"/>
+    </mask>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#bg)"/>
+  <g transform="rotate(-10 32 34)">
+    <rect x="7" y="18" width="50" height="32" rx="6" fill="#FFFFFF" mask="url(#notch)"/>
+    <line x1="43" y1="22.5" x2="43" y2="45.5" stroke="#083D20" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="0.1 5.6"/>
+    <path d="M16 34.5l6 6 12-13" fill="none" stroke="#083D20" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <circle cx="52" cy="12" r="7" fill="#FBBF24" stroke="#0E5F33" stroke-width="3"/>
+</svg>

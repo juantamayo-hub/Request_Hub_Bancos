@@ -23,7 +23,7 @@ export function TicketFilters({ current, categories }: Props) {
   const router   = useRouter()
   const pathname = usePathname()
   const params   = useSearchParams()
-  const [, startTransition] = useTransition()
+  const [isPending, startTransition] = useTransition()
 
   const [catOpen, setCatOpen] = useState(false)
   const catRef = useRef<HTMLDivElement>(null)
@@ -97,6 +97,14 @@ export function TicketFilters({ current, categories }: Props) {
 
   return (
     <div className="flex items-center gap-2 flex-wrap mb-4">
+      {/* Loading indicator */}
+      {isPending && (
+        <span className="flex items-center gap-1.5 text-xs text-gray-400 select-none">
+          <span className="inline-block h-3 w-3 animate-spin rounded-full border border-gray-400 border-t-transparent" />
+          Cargando…
+        </span>
+      )}
+
       {categories.length > 0 && (
         <div className="relative" ref={catRef}>
           <button

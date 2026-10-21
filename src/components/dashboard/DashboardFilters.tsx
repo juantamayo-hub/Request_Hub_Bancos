@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
-import { useCallback } from 'react'
+import { useCallback, useTransition } from 'react'
 
 interface Props {
   banks:        string[]
@@ -14,6 +14,7 @@ export function DashboardFilters({ banks, categories, defaultFrom, defaultTo }: 
   const router     = useRouter()
   const pathname   = usePathname()
   const sp         = useSearchParams()
+  const [isPending, startTransition] = useTransition()
 
   const from     = sp.get('from')     ?? defaultFrom ?? ''
   const to       = sp.get('to')       ?? defaultTo   ?? ''
@@ -24,7 +25,7 @@ export function DashboardFilters({ banks, categories, defaultFrom, defaultTo }: 
     const params = new URLSearchParams(sp.toString())
     if (value) params.set(key, value)
     else params.delete(key)
-    router.push(`${pathname}?${params.toString()}`)
+    startTransition(() => router.push(`${pathname}?${params.toString()}`))
   }, [sp, router, pathname])
 
   return (
@@ -76,7 +77,7 @@ export function DashboardFilters({ banks, categories, defaultFrom, defaultTo }: 
       {/* Clear */}
       {(from || to || bank || category) && (
         <button
-          onClick={() => router.push(pathname)}
+          onClick={() => startTransition(() => router.push(pathname))}
           className="inline-flex items-center gap-1 h-7 px-2.5 text-xs font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors ml-1"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -84,6 +85,14 @@ export function DashboardFilters({ banks, categories, defaultFrom, defaultTo }: 
           </svg>
           Limpiar
         </button>
+      )}
+
+      {/* Loading indicator */}
+      {isPending && (
+        <span className="flex items-center gap-1.5 text-xs text-gray-400 select-none ml-auto">
+          <span className="inline-block h-3 w-3 animate-spin rounded-full border border-gray-400 border-t-transparent" />
+          Actualizando…
+        </span>
       )}
     </div>
   )
