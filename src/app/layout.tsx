@@ -8,10 +8,7 @@ import { almaVisibleForCurrentUser } from '@/lib/alma'
 export const metadata: Metadata = {
   title: { default: 'Request Hub · Bancos', template: '%s | Request Hub Bancos' },
   description: 'Plataforma de gestión de solicitudes bancarias',
-  icons: {
-    icon: '/logo-bayteca.svg',
-    apple: '/logo-bayteca.svg',
-  },
+  // Icons come from the file conventions src/app/icon.svg + src/app/apple-icon.png
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
